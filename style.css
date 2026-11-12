@@ -106,3 +106,9 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px}
 .con-list{display:grid;gap:10px}
 .con-item{border:1px solid var(--line);border-radius:12px;padding:8px 12px}
 .con-item .s{font-weight:800;font-size:16px;margin:4px 0 2px}
+
+.party-new{margin-top:6px}
+.party-new-row{display:flex;gap:8px;align-items:stretch}
+.party-new-row input{flex:1;min-width:0}
+.party-new-row .btn{flex:0 0 auto}
+.party-new-err .notice{margin:6px 0 0}

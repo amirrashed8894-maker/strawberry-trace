@@ -74,21 +74,106 @@
   function toast(msg, kind) {
     return msg ? `<div class="notice ${kind||''}">${esc(msg)}</div>` : '';
   }
+  function partyPlaceholder(kind) {
+    if (kind === 'supplier') return 'اكتب اسم المورد الجديد';
+    if (kind === 'factory') return 'اسم مصنع التعبئة الجديد';
+    return 'اسم العميل الجديد';
+  }
   function partySelect(id, kind, list, current) {
-    const opts = [`<option value="">—</option>`]
-      .concat((list || []).map(p => `<option ${p.name===current?'selected':''}>${esc(p.name)}</option>`))
+    const hasCurrent = !!(current && (list || []).some(p => p.name === current));
+    const opts = [`<option value="" ${hasCurrent ? '' : 'selected'}>—</option>`]
+      .concat((list || []).map(p => `<option value="${esc(p.name)}" ${p.name===current?'selected':''}>${esc(p.name)}</option>`))
       .concat(`<option value="__new__">إضافة جديد</option>`);
-    return `<select id="${id}" data-party="${kind}">${opts.join('')}</select>`;
+    return `<div class="party-wrap">
+      <select id="${id}" data-party="${kind}">${opts.join('')}</select>
+      <div class="party-new" hidden>
+        <div class="party-new-row">
+          <input type="text" class="party-new-in" autocomplete="off" placeholder="${esc(partyPlaceholder(kind))}">
+          <button type="button" class="btn sm party-new-save">حفظ</button>
+        </div>
+        <div class="party-new-err"></div>
+      </div>
+    </div>`;
+  }
+  function partyNewBox(selectEl) {
+    const wrap = selectEl && selectEl.closest('.party-wrap');
+    return wrap && wrap.querySelector('.party-new');
+  }
+  function showPartyNew(selectEl, show) {
+    const box = partyNewBox(selectEl);
+    if (!box) return;
+    box.hidden = !show;
+    if (show) {
+      const input = box.querySelector('.party-new-in');
+      if (input) setTimeout(() => input.focus(), 0);
+    }
+  }
+  function setPartyNewError(selectEl, msg) {
+    const err = partyNewBox(selectEl) && partyNewBox(selectEl).querySelector('.party-new-err');
+    if (!err) return;
+    err.innerHTML = msg ? toast(msg, 'warn') : '';
+  }
+  async function commitNewParty(selectEl) {
+    const kind = selectEl.getAttribute('data-party');
+    const box = partyNewBox(selectEl);
+    const input = box && box.querySelector('.party-new-in');
+    const name = input && input.value.trim();
+    if (!name) {
+      setPartyNewError(selectEl, 'اكتب الاسم أولاً');
+      if (input) input.focus();
+      throw new Error('اكتب الاسم أولاً');
+    }
+    const btn = box.querySelector('.party-new-save');
+    if (btn) btn.disabled = true;
+    try {
+      const row = await ST.addParty(kind, name);
+      let opt = Array.from(selectEl.options).find(o => o.value === row.name);
+      if (!opt) {
+        opt = document.createElement('option');
+        opt.value = row.name;
+        opt.textContent = row.name;
+        selectEl.insertBefore(opt, selectEl.lastElementChild);
+      }
+      opt.selected = true;
+      selectEl.value = row.name;
+      if (input) input.value = '';
+      setPartyNewError(selectEl, '');
+      showPartyNew(selectEl, false);
+      return row.name;
+    } catch (e) {
+      if (e && e.message !== 'اكتب الاسم أولاً') setPartyNewError(selectEl, ST.errMsg(e));
+      throw e;
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+  function bindPartySelects(root) {
+    (root || document).querySelectorAll('select[data-party]').forEach(sel => {
+      const sync = () => showPartyNew(sel, sel.value === '__new__');
+      sel.addEventListener('change', () => { setPartyNewError(sel, ''); sync(); });
+      sync();
+      const box = partyNewBox(sel);
+      if (!box) return;
+      const input = box.querySelector('.party-new-in');
+      const btn = box.querySelector('.party-new-save');
+      if (btn) btn.addEventListener('click', () => { commitNewParty(sel).catch(() => {}); });
+      if (input) input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); commitNewParty(sel).catch(() => {}); }
+      });
+    });
   }
   async function ensureParty(kind, selectEl) {
+    if (!selectEl) return '';
     if (selectEl.value !== '__new__') return selectEl.value;
-    const name = prompt(kind === 'supplier' ? 'اسم المورد:' : kind === 'factory' ? 'اسم مصنع التعبئة:' : 'اسم العميل:');
-    if (!name || !name.trim()) { selectEl.value = ''; return ''; }
-    const row = await ST.addParty(kind, name.trim());
-    const opt = document.createElement('option');
-    opt.value = row.name; opt.textContent = row.name; opt.selected = true;
-    selectEl.insertBefore(opt, selectEl.lastElementChild);
-    return row.name;
+    const input = partyNewBox(selectEl) && partyNewBox(selectEl).querySelector('.party-new-in');
+    const name = input && input.value.trim();
+    if (!name) {
+      showPartyNew(selectEl, true);
+      const label = kind === 'supplier' ? 'المورد' : kind === 'factory' ? 'مصنع التعبئة' : 'العميل';
+      setPartyNewError(selectEl, 'اكتب اسم ' + label + ' أو اختر من القائمة');
+      throw new Error('اكتب اسم ' + label + ' أو اختر من القائمة');
+    }
+    return commitNewParty(selectEl);
   }
 
   function dateField(id, iso, label, defaultToday) {
@@ -589,6 +674,7 @@
       box.querySelector(sel).addEventListener('input', refreshCalc);
     });
     refreshCalc();
+    bindPartySelects(box);
 
     box.querySelector('[data-act="save"]').onclick = async () => {
       const msg = box.querySelector('#lotMsg');
@@ -711,6 +797,8 @@
         </tr>`).join('') : '<tr><td colspan="6">لا يوجد حاويات بعد</td></tr>'}
         </tbody></table></div>
       </div>`;
+
+    bindPartySelects(box);
 
     box.querySelector('[data-act="save"]').onclick = async () => {
       const msg = box.querySelector('#conMsg');
