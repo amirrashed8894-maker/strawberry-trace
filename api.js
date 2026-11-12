@@ -1,7 +1,7 @@
 (function (global) {
   const cfg = global.ST_CONFIG;
   const sb = global.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'st-auth' }
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
   });
 
   const FIELDS = [
@@ -49,28 +49,7 @@
 
   const api = {
     sb, FIELDS, cairoToday, fmtDate, normalizeSerial, errMsg,
-    async session() {
-      const { data } = await sb.auth.getSession();
-      return data.session || null;
-    },
-    async user() {
-      const { data } = await sb.auth.getUser();
-      return data.user || null;
-    },
-    async login(email, password) {
-      const { data, error } = await sb.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      return data;
-    },
-    async logout() { await sb.auth.signOut(); },
-    async isAdmin() {
-      const u = await api.user();
-      if (!u) return false;
-      if (u.app_metadata && u.app_metadata.role === 'admin') return true;
-      const { data, error } = await sb.from('st_admins').select('user_id').eq('user_id', u.id).maybeSingle();
-      if (error) return false;
-      return !!data;
-    },
+    // Admin is open by design (v1.0.4): no login. Operations go through granted RPCs only.
     lookup(serial) { return rpc('st_lookup_carton', { p_serial: serial }); },
     serialStatus(serial) { return rpc('st_serial_status', { p_serial: serial }); },
     generateBatch(count, labelSize, labelConfig, notes) {
@@ -93,165 +72,47 @@
     },
     nextLotNumber() { return rpc('st_next_lot_number'); },
     markPrinted(id) { return rpc('st_mark_batch_printed', { p_batch_id: id }); },
-    async settings() {
-      const { data, error } = await sb.from('st_settings').select('*').eq('id', 1).single();
-      if (error) throw error;
-      return data;
-    },
-    async saveSettings(patch) {
-      const { data, error } = await sb.from('st_settings').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', 1).select().single();
-      if (error) throw error;
-      return data;
-    },
+    settings() { return rpc('st_get_settings'); },
+    saveSettings(patch) { return rpc('st_save_settings', { p_patch: patch || {} }); },
     async parties(kind) {
-      let q = sb.from('st_parties').select('*').order('name');
-      if (kind) q = q.eq('kind', kind);
-      const { data, error } = await q;
-      if (error) throw error;
+      const data = await rpc('st_list_parties', { p_kind: kind || null });
       return data || [];
     },
-    async addParty(kind, name) {
-      const { data, error } = await sb.from('st_parties').insert({ kind, name: name.trim() }).select().single();
-      if (error) {
-        if (String(error.message || '').includes('duplicate')) {
-          const { data: d2 } = await sb.from('st_parties').select('*').eq('kind', kind).eq('name', name.trim()).single();
-          return d2;
-        }
-        throw error;
-      }
-      return data;
-    },
+    addParty(kind, name) { return rpc('st_add_party', { p_kind: kind, p_name: name }); },
     async listBatches() {
-      const { data, error } = await sb.from('st_batches').select('*').order('created_at', { ascending: false }).limit(100);
-      if (error) throw error;
+      const data = await rpc('st_list_batches');
       return data || [];
     },
     async batchCartons(batchId) {
-      const { data, error } = await sb.from('st_cartons').select('serial,seq,check_code,lot_id,container_id').eq('batch_id', batchId).order('seq');
-      if (error) throw error;
+      const data = await rpc('st_batch_cartons', { p_batch_id: batchId });
       return data || [];
-    },
-    async rangeCartons(from, to) {
-      const a = await api.cartonBySerial(from);
-      const b = await api.cartonBySerial(to);
-      if (!a || !b) throw new Error('رقم غير موجود في المدى');
-      const lo = Math.min(a.seq, b.seq), hi = Math.max(a.seq, b.seq);
-      const { data, error } = await sb.from('st_cartons').select('serial,seq').gte('seq', lo).lte('seq', hi).order('seq');
-      if (error) throw error;
-      return data || [];
-    },
-    async cartonBySerial(serial) {
-      const s = normalizeSerial(serial);
-      const { data, error } = await sb.from('st_cartons').select('*').eq('serial', s).maybeSingle();
-      if (error) throw error;
-      return data;
     },
     async listLots() {
-      const { data, error } = await sb.from('st_lots').select('*').order('created_at', { ascending: false }).limit(200);
-      if (error) throw error;
+      const data = await rpc('st_list_lots');
       return data || [];
     },
-    async saveLot(row, id) {
-      if (id) {
-        const { data, error } = await sb.from('st_lots').update({ ...row, updated_at: new Date().toISOString() }).eq('id', id).select().single();
-        if (error) throw error;
-        return data;
-      }
-      const { data, error } = await sb.from('st_lots').insert(row).select().single();
-      if (error) throw error;
-      return data;
-    },
+    saveLot(row, id) { return rpc('st_save_lot', { p_row: row, p_id: id || null }); },
     async listContainers() {
-      const { data, error } = await sb.from('st_containers').select('*').order('created_at', { ascending: false }).limit(200);
-      if (error) throw error;
+      const data = await rpc('st_list_containers');
       return data || [];
     },
-    async saveContainer(row, id) {
-      if (id) {
-        const { data, error } = await sb.from('st_containers').update({ ...row, updated_at: new Date().toISOString() }).eq('id', id).select().single();
-        if (error) throw error;
-        return data;
-      }
-      const { data, error } = await sb.from('st_containers').insert(row).select().single();
-      if (error) throw error;
-      return data;
-    },
+    saveContainer(row, id) { return rpc('st_save_container', { p_row: row, p_id: id || null }); },
     async dashboard() {
-      const [cartons, lots, containers, batches, scans] = await Promise.all([
-        sb.from('st_cartons').select('id,lot_id,container_id,batch_id'),
-        sb.from('st_lots').select('id', { count: 'exact', head: true }),
-        sb.from('st_containers').select('id', { count: 'exact', head: true }),
-        sb.from('st_batches').select('id,count,printed_at,created_at'),
-        sb.from('st_scan_logs').select('id,serial_attempt,scanned_at,is_admin,carton_id').order('scanned_at', { ascending: false }).limit(12)
-      ]);
-      if (cartons.error) throw cartons.error;
-      const rows = cartons.data || [];
-      return {
-        total: rows.length,
-        withLot: rows.filter(r => r.lot_id).length,
-        loaded: rows.filter(r => r.container_id).length,
-        free: rows.filter(r => !r.lot_id && !r.container_id).length,
-        lots: lots.count || 0,
-        containers: containers.count || 0,
-        batches: (batches.data || []).length,
-        printedCartons: (batches.data || []).filter(b => b.printed_at).reduce((s, b) => s + (b.count || 0), 0),
-        recentScans: scans.data || []
-      };
+      const d = await rpc('st_dashboard');
+      return d || { total:0, withLot:0, loaded:0, free:0, lots:0, containers:0, batches:0, printedCartons:0, recentScans:[] };
     },
     async search({ q, lotId, containerId, supplier }) {
-      const term = (q || '').trim();
-      if (term && /^RS/i.test(term)) {
-        const { data, error } = await sb.from('st_cartons')
-          .select('*, st_lots(*), st_containers(*)')
-          .ilike('serial', `%${normalizeSerial(term).replace(/%/g, '')}%`)
-          .order('seq').limit(200);
-        if (error) throw error;
-        return data || [];
-      }
-      let lotIds = null;
-      if (supplier) {
-        const { data, error } = await sb.from('st_lots').select('id').ilike('supplier', `%${supplier}%`);
-        if (error) throw error;
-        lotIds = (data || []).map(x => x.id);
-        if (!lotIds.length) return [];
-      }
-      if (term && !lotId) {
-        const { data: lots } = await sb.from('st_lots').select('id,lot_number,supplier').or(`lot_number.ilike.%${term}%,supplier.ilike.%${term}%`);
-        const { data: cons } = await sb.from('st_containers').select('id,container_number,customer').or(`container_number.ilike.%${term}%,customer.ilike.%${term}%,destination.ilike.%${term}%`);
-        const lids = (lots || []).map(x => x.id);
-        const cids = (cons || []).map(x => x.id);
-        let qy = sb.from('st_cartons').select('*, st_lots(*), st_containers(*)');
-        const ors = [];
-        if (lids.length) ors.push(`lot_id.in.(${lids.join(',')})`);
-        if (cids.length) ors.push(`container_id.in.(${cids.join(',')})`);
-        ors.push(`serial.ilike.%${term}%`);
-        qy = qy.or(ors.join(','));
-        if (lotId) qy = qy.eq('lot_id', lotId);
-        if (containerId) qy = qy.eq('container_id', containerId);
-        const { data, error } = await qy.order('seq').limit(500);
-        if (error) throw error;
-        return data || [];
-      }
-      let qy = sb.from('st_cartons').select('*, st_lots(*), st_containers(*)');
-      if (lotId) qy = qy.eq('lot_id', lotId);
-      if (containerId) qy = qy.eq('container_id', containerId);
-      if (lotIds) qy = qy.in('lot_id', lotIds);
-      const { data, error } = await qy.order('seq').limit(500);
-      if (error) throw error;
+      const data = await rpc('st_search_cartons', {
+        p_q: q || null,
+        p_lot_id: lotId || null,
+        p_container_id: containerId || null,
+        p_supplier: supplier || null
+      });
       return data || [];
     },
     async lotTrace(lotId) {
-      const { data: lot, error: e1 } = await sb.from('st_lots').select('*').eq('id', lotId).single();
-      if (e1) throw e1;
-      const { data: cartons, error: e2 } = await sb.from('st_cartons').select('id,serial,seq,container_id,st_containers(*)').eq('lot_id', lotId).order('seq');
-      if (e2) throw e2;
-      const byCon = new Map();
-      for (const c of cartons || []) {
-        const key = c.container_id || 'none';
-        if (!byCon.has(key)) byCon.set(key, { container: c.st_containers || null, cartons: [] });
-        byCon.get(key).cartons.push(c);
-      }
-      return { lot, total: (cartons || []).length, groups: [...byCon.values()] };
+      const data = await rpc('st_lot_trace', { p_lot_id: lotId });
+      return data;
     },
     async exportRows(rows) {
       return (rows || []).map(r => ({

@@ -31,9 +31,8 @@
     let adminPath = '';
     if (pth === '/admin' || pth.startsWith('/admin/')) adminPath = pth === '/admin' ? 'admin' : pth.slice(1);
     else if (q.get('p')) adminPath = q.get('p');
-    if (adminPath === 'admin' || adminPath === 'admin/login') return { name: state.admin ? 'dash' : 'login' };
+    if (adminPath === 'admin' || adminPath === 'admin/login') return { name: 'dash' };
     if (adminPath.startsWith('admin/')) {
-      if (!state.admin && !state.user) return { name: 'login' };
       const rest = adminPath.slice('admin/'.length);
       if (['print','lots','containers','assign','search','settings'].includes(rest)) return { name: rest };
       return { name: 'dash' };
@@ -65,7 +64,7 @@
       ['/admin/settings', 'settings', 'الإعدادات']
     ];
     return `<nav class="nav">${items.map(i => `<a href="${i[0]}" class="${cur===i[1]?'on':''}">${i[2]}</a>`).join('')}
-      <a href="#" data-act="logout" class="ghost">خروج</a></nav>`;
+      <a href="/" class="ghost">الموقع العام</a></nav>`;
   }
   function toast(msg, kind) {
     return msg ? `<div class="notice ${kind||''}">${esc(msg)}</div>` : '';
@@ -122,7 +121,7 @@
         </div>
         <div id="ocrMsg" class="ocr-progress"></div>
       </div>
-      <div class="footer">شركة الراشد للتجارة · تتبع الكرتون · <a href="/?p=admin">دخول الإدارة</a></div>`;
+      <div class="footer">شركة الراشد للتجارة · تتبع الكرتون · <a href="/?p=admin">الإدارة</a></div>`;
     const input = app.querySelector('#serialIn');
     input.focus();
     input.addEventListener('keydown', e => { if (e.key === 'Enter') openSerial(input.value); });
@@ -245,41 +244,6 @@
     try {
       return new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }).format(new Date(iso));
     } catch (e) { return iso; }
-  }
-
-  /* ---------------- Login ---------------- */
-  function viewLogin() {
-    app.classList.remove('wide');
-    app.innerHTML = header('دخول الإدارة', 'تتبع الكرتون — شركة الراشد للتجارة') + `
-      <div class="card login" style="margin-top:0">
-        <div class="f"><label>البريد الإلكتروني</label><input id="email" type="email" autocomplete="username" dir="ltr"></div>
-        <div class="f" style="margin-top:10px"><label>كلمة المرور</label><input id="pass" type="password" autocomplete="current-password"></div>
-        <div class="row"><button class="btn pri wide" data-act="login">دخول</button></div>
-        <div id="loginErr"></div>
-      </div>`;
-    app.querySelector('[data-act="login"]').onclick = doLogin;
-    app.querySelector('#pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
-  }
-  async function doLogin() {
-    const email = app.querySelector('#email').value.trim();
-    const pass = app.querySelector('#pass').value;
-    const box = app.querySelector('#loginErr');
-    box.innerHTML = '';
-    try {
-      await ST.login(email, pass);
-      state.user = await ST.user();
-      state.admin = await ST.isAdmin();
-      if (!state.admin) {
-        await ST.logout();
-        state.user = null;
-        box.innerHTML = toast('الحساب ده مش حساب إدارة.', 'warn');
-        return;
-      }
-      try { state.settings = await ST.settings(); } catch (e) {}
-      go('/admin', true);
-    } catch (e) {
-      box.innerHTML = toast(ST.errMsg(e), 'warn');
-    }
   }
 
   /* ---------------- Dashboard ---------------- */
@@ -824,11 +788,6 @@
     app.querySelectorAll('.nav a').forEach(a => {
       a.addEventListener('click', ev => {
         const href = a.getAttribute('href');
-        if (a.getAttribute('data-act') === 'logout') {
-          ev.preventDefault();
-          ST.logout().then(() => { state.user = null; state.admin = false; go('/'); });
-          return;
-        }
         if (href && href.startsWith('/')) { ev.preventDefault(); go(href); }
       });
     });
@@ -838,8 +797,6 @@
     const r = parseRoute();
     if (r.name === 'home') return viewHome();
     if (r.name === 'carton') return viewCarton(r.serial);
-    if (r.name === 'login') return viewLogin();
-    if (!state.admin) return viewLogin();
     if (r.name === 'dash') return viewDash();
     if (r.name === 'print') return viewPrint();
     if (r.name === 'lots') return viewLots();
@@ -862,13 +819,7 @@
   });
 
   (async function init() {
-    try {
-      state.user = await ST.user();
-      if (state.user) state.admin = await ST.isAdmin();
-      if (state.admin) {
-        try { state.settings = await ST.settings(); } catch (e) {}
-      }
-    } catch (e) {}
+    try { state.settings = await ST.settings(); } catch (e) {}
     render();
   })();
 })();
