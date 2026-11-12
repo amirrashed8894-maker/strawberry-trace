@@ -1,6 +1,6 @@
 (function (global) {
   const SERIAL_RE = /RS[-\s]?(\d{6})[-\s]?([A-HJ-NP-Z2-9OIL01]{4})/gi;
-  const LOT_RE = /FS[-\s]?([0O][\dOIl]{3})[-\s]?([0OIl\d]{2,4})/gi;
+  const LOT_RE = /FS[-\s]?([0-9OIl]{4})[-\s]?([0-9OIl]{2,4})/gi;
   const CHECK_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
   function fixCheck(raw) {
