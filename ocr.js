@@ -58,35 +58,6 @@
     return list[0] || null;
   }
 
-  function serialFromQrPayload(data) {
-    if (!data) return null;
-    const s = String(data).trim();
-    const urlMatch = s.match(/\/c\/([A-Za-z0-9-]+)/) || s.match(/[?&#]c=([A-Za-z0-9-]+)/);
-    const cand = urlMatch ? urlMatch[1] : s;
-    return global.ST ? ST.normalizeSerial(cand) : cand.toUpperCase();
-  }
-
-  function decodeQrFromImageData(imageData) {
-    if (!global.jsQR) return null;
-    const r = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' });
-    return r && r.data ? serialFromQrPayload(r.data) : null;
-  }
-
-  async function imageToImageData(file) {
-    const bmp = await createImageBitmap(file);
-    const max = 1800;
-    let w = bmp.width, h = bmp.height;
-    if (Math.max(w, h) > max) {
-      const k = max / Math.max(w, h);
-      w = Math.round(w * k); h = Math.round(h * k);
-    }
-    const canvas = document.createElement('canvas');
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(bmp, 0, 0, w, h);
-    return ctx.getImageData(0, 0, w, h);
-  }
-
   let tessLoading = null;
   function loadTesseract() {
     if (global.Tesseract) return Promise.resolve(global.Tesseract);
@@ -139,13 +110,6 @@
   }
 
   async function readSerialFromPhoto(file, onProgress, lookupStatus) {
-    try {
-      const id = await imageToImageData(file);
-      const qr = decodeQrFromImageData(id);
-      if (qr && /^RS-\d{6}-[A-HJ-NP-Z2-9]{4}$/.test(qr)) {
-        return { source: 'qr', serial: qr, candidates: [{ serial: qr, count: 1 }] };
-      }
-    } catch (e) { /* fall through to OCR */ }
     if (onProgress) onProgress({ status: 'ocr', progress: 0 });
     const text = await ocrImage(file, onProgress);
     const candidates = extractSerialsFromText(text);
@@ -154,5 +118,5 @@
     return { source: 'ocr', serial, text, candidates };
   }
 
-  global.STOcr = { extractSerialsFromText, pickSerialFromText, readSerialFromPhoto, resolveValidSerial, serialFromQrPayload, decodeQrFromImageData };
+  global.STOcr = { extractSerialsFromText, pickSerialFromText, readSerialFromPhoto, resolveValidSerial };
 })(window);

@@ -86,3 +86,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px}
   body{background:#fff}
   #app,.nav,.btn,.footer,.top .sub{display:none!important}
 }
+
+.entry .entry-in{font-size:22px;padding:14px 12px;text-align:center;letter-spacing:.4px;font-weight:800;border-radius:12px}
+.entry .btn.wide{font-size:18px;padding:14px}
+#reader{display:none!important}

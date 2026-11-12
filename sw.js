@@ -1,4 +1,4 @@
-const C = 'strawberry-trace-v1.0.2';
+const C = 'strawberry-trace-v1.0.3';
 const F = [
   './',
   './index.html',
@@ -17,10 +17,7 @@ const F = [
   './fonts/cairo-latin.woff2',
   './fonts/cairo-latin-ext.woff2',
   './vendor/supabase.min.js',
-  './vendor/qrcode.min.js',
-  './vendor/jsqr.min.js',
-  './vendor/jspdf.umd.min.js',
-  './vendor/html5-qrcode.min.js'
+  './vendor/jspdf.umd.min.js'
 ];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(C).then(c => c.addAll(F.map(u => new Request(u, {cache: 'reload'})))));

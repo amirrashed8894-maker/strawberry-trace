@@ -107,15 +107,17 @@
   function viewHome() {
     app.classList.remove('wide');
     app.innerHTML = header('تتبع الكرتون', 'شركة الراشد للتجارة — Al-Rashed Trading Co.') + `
-      <div class="card">
+      <div class="card entry">
         <h2>اعرض تفاصيل الكرتونة</h2>
-        <p class="muted">صوّر كود الـ QR بكاميرا الموبايل، أو اكتب الرقم المكتوب على الاستيكر، أو التقط صورة لو الكود تالف.</p>
-        <div class="searchbar">
-          <input id="serialIn" class="ltr" placeholder="RS-000001-A3K7" autocomplete="off" autocapitalize="characters">
-          <button class="btn pri" data-act="open-serial">عرض</button>
+        <p class="muted">اكتب الرقم المكتوب على الاستيكر، أو صوّر الكرتونة لو جزء من الرقم اتمسح.</p>
+        <div class="f"><label>رقم الكرتونة</label>
+          <input id="serialIn" class="ltr entry-in" placeholder="RS-000001-A3K7" autocomplete="off" autocapitalize="characters" inputmode="text">
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn pri wide" data-act="open-serial">عرض التفاصيل</button>
         </div>
         <div class="row">
-          <button class="btn" data-act="photo">صوّر الاستيكر</button>
+          <button class="btn wide" data-act="photo">صوّر الكرتونة</button>
           <input id="photoIn" type="file" accept="image/*" capture="environment" hidden>
         </div>
         <div id="ocrMsg" class="ocr-progress"></div>
@@ -145,10 +147,17 @@
       }, ST.serialStatus);
       if (res.serial) {
         const extra = res.candidates && res.candidates.length > 1
-          ? ` (ظهر ${res.candidates[0].count} مرة في الصورة)`
+          ? `ظهر في الصورة ${res.candidates.find(c => c.serial===res.serial)?.count || res.candidates[0].count} مرة.`
           : '';
-        box.textContent = (res.source === 'qr' ? 'اتقرأ الكود بنجاح: ' : 'اتقرأ الرقم من الكتابة: ') + res.serial + extra;
-        openSerial(res.serial);
+        box.innerHTML = `<div class="notice ok" style="margin:8px 0 0">الرقم المقروء من الصورة: <b class="ltr serial">${res.serial}</b><div class="muted">${extra}</div>
+          <div class="row" style="margin-top:8px">
+            <button class="btn pri" type="button" data-act="confirm-serial">تأكيد وعرض التفاصيل</button>
+            <button class="btn ghost" type="button" data-act="cancel-ocr">إلغاء</button>
+          </div></div>`;
+        const input = app.querySelector('#serialIn');
+        if (input) input.value = res.serial;
+        box.querySelector('[data-act="confirm-serial"]').onclick = () => openSerial(res.serial);
+        box.querySelector('[data-act="cancel-ocr"]').onclick = () => { box.innerHTML = ''; };
       } else {
         box.textContent = 'ما قدرناش نقرأ رقم واضح. جرّب صورة أوضح أو اكتب الرقم يدوي.';
       }
@@ -211,10 +220,12 @@
     bindLookupAgain();
   }
   function lookupAgain() {
-    return `<div class="card"><h2>بحث عن رقم آخر</h2>
-      <div class="searchbar"><input id="serialIn" class="ltr" placeholder="RS-000001-A3K7">
-      <button class="btn pri" data-act="open-serial">عرض</button></div>
-      <div class="row"><button class="btn" data-act="photo">صوّر الاستيكر</button>
+    return `<div class="card entry"><h2>بحث عن رقم آخر</h2>
+      <div class="f"><label>رقم الكرتونة</label>
+        <input id="serialIn" class="ltr entry-in" placeholder="RS-000001-A3K7" autocomplete="off" autocapitalize="characters">
+      </div>
+      <div class="row" style="margin-top:10px"><button class="btn pri wide" data-act="open-serial">عرض التفاصيل</button></div>
+      <div class="row"><button class="btn wide" data-act="photo">صوّر الكرتونة</button>
       <input id="photoIn" type="file" accept="image/*" capture="environment" hidden></div>
       <div id="ocrMsg" class="ocr-progress"></div>
       <div class="row"><a class="btn ghost" href="/">الصفحة الرئيسية</a></div></div>`;
@@ -319,10 +330,9 @@
           <div class="f"><label>أعمدة التكرار</label><input id="rCols" type="number" min="2" max="12"></div>
           <div class="f"><label>حجم الخط الصغير (pt)</label><input id="rFont" type="number" step="0.1" min="3" max="9"></div>
           <div class="f"><label>حجم الرقم الكبير (pt)</label><input id="mFont" type="number" step="0.1" min="6" max="16"></div>
-          <div class="f"><label>مقاس الـ QR (مم)</label><input id="qrMm" type="number" step="0.5" min="10" max="28"></div>
           <div class="f"><label>الهامش (مم)</label><input id="marg" type="number" step="0.1" min="0.6" max="4"></div>
         </div>
-        <p class="muted">نفس الرقم يتطبع كبير مرة، ويتكرر في شبكة تغطي الاستيكر. لو جزء من الاستيكر اتمسح من التلج أو الرطوبة، الرقم يفضل ظاهر في مكان تاني. عدد الصفوف والأعمدة يتظبط حسب المقاس.</p>
+        <p class="muted">الاستيكر فيه الرقم كبير مرة، ونفس الرقم متكرر في شبكة تغطي المساحة كلها. لو جزء اتمسح من التلج أو الرطوبة، الرقم يفضل ظاهر في مكان تاني. في أسفل الاستيكر عنوان موقع التتبع.</p>
         <div class="preview-wrap" id="preview"></div>
         <div class="row">
           <button class="btn pri" data-act="gen">توليد وطباعة / تحميل</button>
@@ -338,7 +348,6 @@
         repeatCols: app.querySelector('#rCols').value,
         repeatFontPt: app.querySelector('#rFont').value,
         mainFontPt: app.querySelector('#mFont').value,
-        qrMm: app.querySelector('#qrMm').value,
         marginMm: app.querySelector('#marg').value
       });
     }
@@ -348,7 +357,6 @@
       app.querySelector('#rCols').value = p.repeatCols;
       app.querySelector('#rFont').value = p.repeatFontPt;
       app.querySelector('#mFont').value = p.mainFontPt;
-      app.querySelector('#qrMm').value = p.qrMm;
       app.querySelector('#marg').value = p.marginMm;
       refreshPreview();
     }
@@ -356,11 +364,10 @@
       const cfg = currentCfg();
       const sample = 'RS-000001-A3K7';
       const base = (state.settings && state.settings.public_base_url) || location.origin;
-      const qr = await STLabels.qrDataUrl(sample, base, 280);
-      STLabels.renderPreview(app.querySelector('#preview'), cfg, sample, qr);
+      STLabels.renderPreview(app.querySelector('#preview'), cfg, sample, base);
     }
     sizeEl.onchange = fillFromPreset;
-    ['rRows','rCols','rFont','mFont','qrMm','marg'].forEach(id => {
+    ['rRows','rCols','rFont','mFont','marg'].forEach(id => {
       app.querySelector('#'+id).addEventListener('change', refreshPreview);
     });
     fillFromPreset();
@@ -375,7 +382,7 @@
         const res = await ST.generateBatch(n, cfg.id, {
           repeatRows: cfg.repeatRows, repeatCols: cfg.repeatCols,
           repeatFontPt: cfg.repeatFontPt, mainFontPt: cfg.mainFontPt,
-          qrMm: cfg.qrMm, marginMm: cfg.marginMm
+          marginMm: cfg.marginMm
         }, app.querySelector('#notes').value || null);
         msg.innerHTML = toast(`اتولدت الدفعة ${res.batch_code}: من ${res.first_serial} إلى ${res.last_serial} (${res.count} كرتونة). جاهزة للطباعة.`, 'ok');
         await showPrintActions(res.batch_id, cfg, msg);
@@ -600,7 +607,7 @@
   /* ---------------- Assign ---------------- */
   async function viewAssign() {
     app.classList.add('wide');
-    app.innerHTML = header('التخصيص', 'اربط مدى أرقام بلوت أو حاوية، أو امسح الاستيكر') + adminNav('assign') + `<div id="box"><p class="muted">جاري التحميل…</p></div>`;
+    app.innerHTML = header('التخصيص', 'اربط مدى أرقام بلوت أو حاوية، أو صوّر الاستيكر لتقرأ الرقم') + adminNav('assign') + `<div id="box"><p class="muted">جاري التحميل…</p></div>`;
     bindNav();
     const box = app.querySelector('#box');
     let lots, cons;
@@ -624,9 +631,10 @@
           <button class="btn pri" data-act="assign">تخصيص</button>
           <button class="btn" data-act="only-free">تخصيص الفارغ فقط</button>
           <button class="btn danger" data-act="unassign">إلغاء التخصيص</button>
-          <button class="btn ghost" data-act="scan">مسح بالكاميرا</button>
+          <button class="btn ghost" data-act="photo">صوّر الكرتونة</button>
+          <input id="photoIn" type="file" accept="image/*" capture="environment" hidden>
         </div>
-        <div id="reader" hidden></div>
+        <div id="ocrMsg" class="ocr-progress"></div>
         <div id="msg"></div>
       </div>
       <div class="card">
@@ -671,25 +679,24 @@
         box.querySelector('#msg').innerHTML = toast(`تم إلغاء التخصيص عن ${res.updated} كرتونة`, 'ok');
       } catch (e) { box.querySelector('#msg').innerHTML = toast(ST.errMsg(e), 'warn'); }
     };
-    let scanner = null;
-    box.querySelector('[data-act="scan"]').onclick = async () => {
-      const holder = box.querySelector('#reader');
-      holder.hidden = !holder.hidden;
-      if (holder.hidden) { if (scanner) { try { await scanner.stop(); } catch(e){} } return; }
-      if (!global.Html5Qrcode) { box.querySelector('#msg').innerHTML = toast('مكتبة المسح غير متاحة', 'warn'); return; }
-      scanner = new Html5Qrcode('reader');
+    box.querySelector('[data-act="photo"]').onclick = () => box.querySelector('#photoIn').click();
+    box.querySelector('#photoIn').onchange = async ev => {
+      const file = ev.target.files && ev.target.files[0];
+      if (!file) return;
+      const msg = box.querySelector('#ocrMsg');
+      msg.textContent = 'جاري قراءة الصورة…';
       try {
-        await scanner.start({ facingMode: 'environment' }, { fps: 8, qrbox: 220 }, txt => {
-          const s = STOcr.serialFromQrPayload(txt) || ST.normalizeSerial(txt);
-          if (s) {
-            box.querySelector('#from').value = s;
-            if (!box.querySelector('#to').value) box.querySelector('#to').value = s;
-          }
-        });
-      } catch (e) {
-        holder.hidden = true;
-        box.querySelector('#msg').innerHTML = toast('تعذر فتح الكاميرا: ' + ST.errMsg(e), 'warn');
-      }
+        const res = await STOcr.readSerialFromPhoto(file, m => {
+          if (m.status === 'recognizing text') msg.textContent = 'قراءة النص من الصورة… ' + Math.round((m.progress || 0) * 100) + '%';
+        }, ST.serialStatus);
+        if (res.serial) {
+          msg.innerHTML = `الرقم المقروء: <b class="ltr">${res.serial}</b> — اتكتب في خانة «من رقم». تأكد وبعدين خصّص.`;
+          box.querySelector('#from').value = res.serial;
+          if (!box.querySelector('#to').value) box.querySelector('#to').value = res.serial;
+        } else {
+          msg.textContent = 'ما قدرناش نقرأ رقم واضح. اكتب الرقم يدوي.';
+        }
+      } catch (e) { msg.textContent = ST.errMsg(e); }
     };
     box.querySelector('[data-act="lot2con"]').onclick = () => lot2con(false);
     box.querySelector('[data-act="lot2con-free"]').onclick = () => lot2con(true);
@@ -790,7 +797,7 @@
       <div class="f"><label>اسم الشركة</label><input id="cn" value="${esc(s.company_name||'')}"></div>
       <div class="f" style="margin-top:8px"><label>الاسم بالإنجليزية</label><input id="cne" class="ltr" value="${esc(s.company_name_en||'')}"></div>
       <div class="f" style="margin-top:8px"><label>بادئة الرقم</label><input id="pref" class="ltr" value="${esc(s.serial_prefix||'RS')}"></div>
-      <div class="f" style="margin-top:8px"><label>رابط الموقع العام (يُطبع داخل الـ QR)</label><input id="url" class="ltr" value="${esc(s.public_base_url||'')}"></div>
+      <div class="f" style="margin-top:8px"><label>عنوان الموقع المطبوع أسفل الاستيكر</label><input id="url" class="ltr" value="${esc(s.public_base_url||'')}"></div>
       <h2 style="margin-top:16px">الحقول الظاهرة للعميل</h2>
       <p class="muted">المورد ظاهر افتراضياً، وتقدر تخفيه من هنا.</p>
       ${fields}
