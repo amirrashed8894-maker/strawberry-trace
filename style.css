@@ -102,3 +102,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px}
 .print-cfg{margin-top:16px;padding-top:8px}
 .alloc-box{margin-top:18px;padding-top:8px;border-top:1px solid var(--line)}
 .sticker-calc .notice{margin-bottom:0}
+
+.con-list{display:grid;gap:10px}
+.con-item{border:1px solid var(--line);border-radius:12px;padding:8px 12px}
+.con-item .s{font-weight:800;font-size:16px;margin:4px 0 2px}

@@ -238,17 +238,17 @@
       consHtml = `<div class="notice">لم يتم التحميل بعد</div>`;
     } else {
       consHtml = `<div class="card"><h2>الحاويات</h2>
-        <div class="table-wrap"><table class="tbl"><thead><tr>
-          <th>رقم الحاوية</th><th>تاريخ التحميل</th><th>العميل</th><th>جهة الوصول</th><th>الكراتين</th>
-        </tr></thead><tbody>
-        ${cons.map(c => `<tr>
-          <td class="ltr serial">${val(c.container_number)}</td>
-          <td>${dateVal(c.loading_date)}</td>
-          <td>${val(c.customer)}</td>
-          <td>${val(c.destination)}</td>
-          <td class="num">${c.carton_count != null ? esc(c.carton_count) : '—'}</td>
-        </tr>`).join('')}
-        </tbody></table></div></div>`;
+        <div class="con-list">
+        ${cons.map(c => `<div class="con-item">
+          <div class="s ltr serial">${val(c.container_number)}</div>
+          <div class="details">
+            <div class="item"><div class="k">تاريخ التحميل<small>Loading date</small></div><div class="val">${dateVal(c.loading_date)}</div></div>
+            <div class="item"><div class="k">العميل<small>Customer</small></div><div class="val">${val(c.customer)}</div></div>
+            <div class="item"><div class="k">جهة الوصول<small>Destination</small></div><div class="val">${val(c.destination)}</div></div>
+            <div class="item"><div class="k">الكراتين<small>Cartons</small></div><div class="val num">${c.carton_count != null ? esc(c.carton_count) : '—'}</div></div>
+          </div>
+        </div>`).join('')}
+        </div></div>`;
     }
     app.innerHTML = header('بيانات اللوت', 'شركة الراشد للتجارة') + `
       <div class="card hero-serial">
