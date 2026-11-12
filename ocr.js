@@ -1,0 +1,137 @@
+(function (global) {
+  const SERIAL_RE = /RS[-\s]?(\d{6})[-\s]?([A-HJ-NP-Z2-9OIL01]{4})/gi;
+  const CHECK_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+  function fixChar(ch) {
+    const u = String(ch).toUpperCase();
+    if (u === 'O' || u === '0') return null; // not in alphabet — try both later
+    if (u === 'I' || u === 'L' || u === '1') return null;
+    return CHECK_ALPHABET.includes(u) ? u : u;
+  }
+  function fixCheck(raw) {
+    const map = { O:'Q', '0':'Q', I:'J', L:'J', '1':'7' };
+    // Common OCR confusions mapped to nearest allowed letter — we also expand candidates
+    const opts = [''];
+    const s = String(raw).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+    if (s.length !== 4) return [];
+    function branch(i, acc) {
+      if (i === 4) { opts.push(acc); return; }
+      const ch = s[i];
+      const cands = new Set();
+      if (CHECK_ALPHABET.includes(ch)) cands.add(ch);
+      if (ch === 'O' || ch === '0') { cands.add('Q'); cands.add('D'); cands.add('G'); }
+      if (ch === 'I' || ch === '1' || ch === 'L') { cands.add('J'); cands.add('7'); cands.add('T'); }
+      if (ch === 'S' && !cands.size) cands.add('5');
+      if (ch === '5') cands.add('S');
+      if (ch === 'Z') cands.add('2');
+      if (ch === 'B') cands.add('8');
+      if (ch === '8') cands.add('B');
+      if (!cands.size) cands.add(ch);
+      for (const c of cands) {
+        if (CHECK_ALPHABET.includes(c)) branch(i + 1, acc + c);
+      }
+    }
+    branch(0, '');
+    return [...new Set(opts.filter(Boolean))];
+  }
+
+  function extractSerialsFromText(text) {
+    const counts = new Map();
+    const src = String(text || '').toUpperCase();
+    SERIAL_RE.lastIndex = 0;
+    let m;
+    while ((m = SERIAL_RE.exec(src))) {
+      const num = m[1];
+      const checks = fixCheck(m[2]);
+      for (const chk of checks) {
+        const serial = `RS-${num}-${chk}`;
+        counts.set(serial, (counts.get(serial) || 0) + 1);
+      }
+    }
+    return [...counts.entries()]
+      .map(([serial, count]) => ({ serial, count }))
+      .sort((a, b) => b.count - a.count || a.serial.localeCompare(b.serial));
+  }
+
+  function pickSerialFromText(text) {
+    const list = extractSerialsFromText(text);
+    return list[0] || null;
+  }
+
+  function serialFromQrPayload(data) {
+    if (!data) return null;
+    const s = String(data).trim();
+    const urlMatch = s.match(/\/c\/([A-Za-z0-9-]+)/) || s.match(/[?&#]c=([A-Za-z0-9-]+)/);
+    const cand = urlMatch ? urlMatch[1] : s;
+    return global.ST ? ST.normalizeSerial(cand) : cand.toUpperCase();
+  }
+
+  function decodeQrFromImageData(imageData) {
+    if (!global.jsQR) return null;
+    const r = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' });
+    return r && r.data ? serialFromQrPayload(r.data) : null;
+  }
+
+  async function imageToImageData(file) {
+    const bmp = await createImageBitmap(file);
+    const max = 1800;
+    let w = bmp.width, h = bmp.height;
+    if (Math.max(w, h) > max) {
+      const k = max / Math.max(w, h);
+      w = Math.round(w * k); h = Math.round(h * k);
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bmp, 0, 0, w, h);
+    return ctx.getImageData(0, 0, w, h);
+  }
+
+  let tessLoading = null;
+  function loadTesseract() {
+    if (global.Tesseract) return Promise.resolve(global.Tesseract);
+    if (tessLoading) return tessLoading;
+    tessLoading = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+      s.onload = () => resolve(global.Tesseract);
+      s.onerror = () => reject(new Error('تعذر تحميل أداة قراءة النص'));
+      document.head.appendChild(s);
+    });
+    return tessLoading;
+  }
+
+  async function ocrImage(file, onProgress) {
+    const T = await loadTesseract();
+    const worker = await T.createWorker('eng', 1, {
+      logger: m => { if (onProgress && m && m.status) onProgress(m); }
+    });
+    try {
+      await worker.setParameters({
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-rsRS',
+        tessedit_pageseg_mode: '6'
+      });
+      const { data } = await worker.recognize(file);
+      return data && data.text ? data.text : '';
+    } finally {
+      await worker.terminate();
+    }
+  }
+
+  async function readSerialFromPhoto(file, onProgress) {
+    try {
+      const id = await imageToImageData(file);
+      const qr = decodeQrFromImageData(id);
+      if (qr && /^RS-\d{6}-[A-HJ-NP-Z2-9]{4}$/.test(qr)) {
+        return { source: 'qr', serial: qr, candidates: [{ serial: qr, count: 1 }] };
+      }
+    } catch (e) { /* fall through to OCR */ }
+    if (onProgress) onProgress({ status: 'ocr', progress: 0 });
+    const text = await ocrImage(file, onProgress);
+    const candidates = extractSerialsFromText(text);
+    if (!candidates.length) return { source: 'ocr', serial: null, text, candidates: [] };
+    return { source: 'ocr', serial: candidates[0].serial, text, candidates };
+  }
+
+  global.STOcr = { extractSerialsFromText, pickSerialFromText, readSerialFromPhoto, serialFromQrPayload, decodeQrFromImageData };
+})(window);

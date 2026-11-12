@@ -1,0 +1,7 @@
+.DS_Store
+*.log
+node_modules/
+ADMIN_CREDENTIALS.txt
+out/
+.env
+.env.*
