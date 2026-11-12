@@ -142,7 +142,7 @@
         if (!box) return;
         if (m.status === 'recognizing text') box.textContent = 'قراءة النص من الصورة… ' + Math.round((m.progress || 0) * 100) + '%';
         else if (m.status) box.textContent = 'جاري التحليل…';
-      });
+      }, ST.serialStatus);
       if (res.serial) {
         const extra = res.candidates && res.candidates.length > 1
           ? ` (ظهر ${res.candidates[0].count} مرة في الصورة)`

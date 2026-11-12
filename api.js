@@ -72,6 +72,7 @@
       return !!data;
     },
     lookup(serial) { return rpc('st_lookup_carton', { p_serial: serial }); },
+    serialStatus(serial) { return rpc('st_serial_status', { p_serial: serial }); },
     generateBatch(count, labelSize, labelConfig, notes) {
       return rpc('st_generate_batch', { p_count: count, p_label_size: labelSize, p_label_config: labelConfig || {}, p_notes: notes || null });
     },

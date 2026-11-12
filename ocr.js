@@ -118,7 +118,27 @@
     }
   }
 
-  async function readSerialFromPhoto(file, onProgress) {
+  async function resolveValidSerial(candidates, lookupStatus) {
+    if (!candidates || !candidates.length) return null;
+    const uniq = [];
+    const seen = new Set();
+    for (const c of candidates) {
+      if (seen.has(c.serial)) continue;
+      seen.add(c.serial);
+      uniq.push(c);
+      if (uniq.length >= 10) break;
+    }
+    if (!lookupStatus) return uniq[0].serial;
+    for (const c of uniq) {
+      try {
+        const st = await lookupStatus(c.serial);
+        if (st && st !== 'unknown' && st !== 'invalid') return c.serial;
+      } catch (e) { /* try next */ }
+    }
+    return uniq[0].serial;
+  }
+
+  async function readSerialFromPhoto(file, onProgress, lookupStatus) {
     try {
       const id = await imageToImageData(file);
       const qr = decodeQrFromImageData(id);
@@ -130,8 +150,9 @@
     const text = await ocrImage(file, onProgress);
     const candidates = extractSerialsFromText(text);
     if (!candidates.length) return { source: 'ocr', serial: null, text, candidates: [] };
-    return { source: 'ocr', serial: candidates[0].serial, text, candidates };
+    const serial = await resolveValidSerial(candidates, lookupStatus);
+    return { source: 'ocr', serial, text, candidates };
   }
 
-  global.STOcr = { extractSerialsFromText, pickSerialFromText, readSerialFromPhoto, serialFromQrPayload, decodeQrFromImageData };
+  global.STOcr = { extractSerialsFromText, pickSerialFromText, readSerialFromPhoto, resolveValidSerial, serialFromQrPayload, decodeQrFromImageData };
 })(window);
