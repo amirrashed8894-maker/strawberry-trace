@@ -30,7 +30,7 @@
   }
   function publicUrl(serial, base) {
     const root = (base || (global.ST_CONFIG && ST_CONFIG.defaultPublicUrl) || location.origin).replace(/\/+$/, '');
-    return `${root}/c/${encodeURIComponent(serial)}`;
+    return `${root}/?c=${encodeURIComponent(serial)}`;
   }
 
   async function qrDataUrl(serial, base, size) {

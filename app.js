@@ -3,21 +3,38 @@
   const state = { user: null, admin: false, settings: null, toast: '' };
 
   function path() { return (location.pathname.replace(/\/+$/, '') || '/'); }
+  function toHref(href) {
+    if (!href || href === '/') return '/';
+    try {
+      const u = new URL(href, location.origin);
+      const pn = u.pathname.replace(/\/+$/, '') || '/';
+      const m = pn.match(/^\/c\/([^/]+)$/);
+      if (m) return '/?c=' + encodeURIComponent(decodeURIComponent(m[1]));
+      if (pn === '/admin' || pn === '/admin/login') return '/?p=admin';
+      if (pn.startsWith('/admin/')) return '/?p=' + encodeURIComponent(pn.slice(1));
+      if (u.searchParams.get('c') || u.searchParams.get('p')) return (pn === '/' ? '/' : pn) + u.search;
+      return href;
+    } catch (e) { return href; }
+  }
   function go(href, replace) {
-    if (replace) history.replaceState({}, '', href);
-    else history.pushState({}, '', href);
+    const dest = toHref(href);
+    if (replace) history.replaceState({}, '', dest);
+    else history.pushState({}, '', dest);
     render();
   }
   function parseRoute() {
-    const p = path();
+    const pth = path();
     const q = new URLSearchParams(location.search);
-    const m = p.match(/^\/c\/([^/]+)$/);
+    const m = pth.match(/^\/c\/([^/]+)$/);
     if (m) return { name: 'carton', serial: decodeURIComponent(m[1]) };
     if (q.get('c')) return { name: 'carton', serial: q.get('c') };
-    if (p === '/admin' || p === '/admin/login') return { name: state.admin ? 'dash' : 'login' };
-    if (p.startsWith('/admin/')) {
+    let adminPath = '';
+    if (pth === '/admin' || pth.startsWith('/admin/')) adminPath = pth === '/admin' ? 'admin' : pth.slice(1);
+    else if (q.get('p')) adminPath = q.get('p');
+    if (adminPath === 'admin' || adminPath === 'admin/login') return { name: state.admin ? 'dash' : 'login' };
+    if (adminPath.startsWith('admin/')) {
       if (!state.admin && !state.user) return { name: 'login' };
-      const rest = p.slice('/admin/'.length);
+      const rest = adminPath.slice('admin/'.length);
       if (['print','lots','containers','assign','search','settings'].includes(rest)) return { name: rest };
       return { name: 'dash' };
     }
@@ -103,7 +120,7 @@
         </div>
         <div id="ocrMsg" class="ocr-progress"></div>
       </div>
-      <div class="footer">شركة الراشد للتجارة · تتبع الكرتون</div>`;
+      <div class="footer">شركة الراشد للتجارة · تتبع الكرتون · <a href="/?p=admin">دخول الإدارة</a></div>`;
     const input = app.querySelector('#serialIn');
     input.focus();
     input.addEventListener('keydown', e => { if (e.key === 'Enter') openSerial(input.value); });
