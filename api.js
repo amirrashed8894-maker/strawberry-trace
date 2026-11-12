@@ -114,6 +114,22 @@
       const data = await rpc('st_lot_trace', { p_lot_id: lotId });
       return data;
     },
+    lotStickerStats(lotId) { return rpc('st_lot_sticker_stats', { p_lot_id: lotId }); },
+    requiredStickers(weightKg, cartonKg) {
+      const w = Number(weightKg), c = Number(cartonKg);
+      if (!w || !c || w <= 0 || c <= 0) return null;
+      return Math.ceil((w / c) - 1e-9);
+    },
+    scaleToKg(value, unit) {
+      const n = Number(value);
+      if (value === '' || value == null || Number.isNaN(n)) return null;
+      return unit === 't' ? n * 1000 : n;
+    },
+    kgToScale(kg, unit) {
+      if (kg == null || kg === '' || Number.isNaN(Number(kg))) return '';
+      const n = Number(kg);
+      return unit === 't' ? (Math.round((n / 1000) * 1000) / 1000) : (Math.round(n * 100) / 100);
+    },
     async exportRows(rows) {
       return (rows || []).map(r => ({
         serial: r.serial,

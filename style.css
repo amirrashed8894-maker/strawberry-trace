@@ -90,3 +90,9 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px}
 .entry .entry-in{font-size:22px;padding:14px 12px;text-align:center;letter-spacing:.4px;font-weight:800;border-radius:12px}
 .entry .btn.wide{font-size:18px;padding:14px}
 #reader{display:none!important}
+
+.weight-in{display:flex;gap:8px;align-items:stretch}
+.weight-in input{flex:1}
+.weight-in select{width:118px;flex:0 0 118px}
+.sticker-calc{margin:14px 0 4px;background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.sticker-calc .big{font-size:32px;font-weight:800;letter-spacing:-.4px;line-height:1.2;margin:2px 0}

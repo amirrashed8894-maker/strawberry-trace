@@ -428,6 +428,36 @@
   }
 
   /* ---------------- Lots ---------------- */
+
+  function offerPrintButtons(host, batchId, cfg) {
+    const extra = document.createElement('div');
+    extra.className = 'row';
+    extra.innerHTML = `<button class="btn pri" data-act="pdf">تحميل PDF</button>
+      <button class="btn" data-act="print">طباعة من المتصفح</button>
+      <span class="muted" id="prog"></span>`;
+    host.appendChild(extra);
+    const base = (state.settings && state.settings.public_base_url) || location.origin;
+    const prog = extra.querySelector('#prog');
+    const tick = (i, t) => { prog.textContent = `جاري تجهيز ${i} من ${t}…`; };
+    extra.querySelector('[data-act="pdf"]').onclick = async () => {
+      try {
+        const cartons = await ST.batchCartons(batchId);
+        await STLabels.downloadPdf(cartons.map(c => c.serial), cfg, base, tick);
+        await ST.markPrinted(batchId);
+        prog.textContent = 'تم تحميل الملف، واتعلم على الدفعة إنها اتطبعت.';
+      } catch (e) { prog.textContent = ST.errMsg(e); }
+    };
+    extra.querySelector('[data-act="print"]').onclick = async () => {
+      try {
+        const cartons = await ST.batchCartons(batchId);
+        await STLabels.printLabels(cartons.map(c => c.serial), cfg, base, tick);
+        await ST.markPrinted(batchId);
+        prog.textContent = 'اتفتحت نافذة الطباعة، واتعلم على الدفعة إنها اتطبعت.';
+      } catch (e) { prog.textContent = ST.errMsg(e); }
+    };
+  }
+
+  /* ---------------- Lots ---------------- */
   async function viewLots() {
     app.classList.add('wide');
     app.innerHTML = header('اللوتات', 'عربية المورد ≈ لوت واحد') + adminNav('lots') + `<div id="box"><p class="muted">جاري التحميل…</p></div>`;
@@ -446,6 +476,13 @@
       lot_number: nextNo, supplier:'', receipt_date: ST.cairoToday(), weight_kg:'', packing_factory:'',
       packing_date: ST.cairoToday(), production_date:'', variety:'فراولة مجمدة', size_grade:'', carton_weight_kg:'10', notes:''
     };
+    const initialUnit = (r.weight_kg != null && r.weight_kg !== '' && Number(r.weight_kg) < 1000) ? 'kg' : 't';
+    const initialScale = (r.weight_kg != null && r.weight_kg !== '') ? ST.kgToScale(r.weight_kg, initialUnit) : '';
+    let stats = null;
+    if (edit && edit.id) {
+      try { stats = await ST.lotStickerStats(edit.id); } catch (e) { stats = null; }
+    }
+    const sizeOpts = Object.values(STLabels.PRESETS).map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
     box.innerHTML = `
       <div class="card">
         <h2>${edit ? 'تعديل لوت' : 'لوت جديد'}</h2>
@@ -453,32 +490,152 @@
           <div class="f"><label>رقم اللوت</label><input id="lot_number" class="ltr" value="${esc(r.lot_number||'')}"> </div>
           <div class="f"><label>المورد</label>${partySelect('supplier','supplier',suppliers,r.supplier)}</div>
           <div class="f"><label>تاريخ الاستلام</label><input id="receipt_date" type="date" value="${esc(r.receipt_date||'')}"> </div>
-          <div class="f"><label>وزن العربية (كجم)</label><input id="weight_kg" type="number" step="0.01" value="${esc(r.weight_kg||'')}"> </div>
+          <div class="f span">
+            <label>ميزان العربية</label>
+            <div class="weight-in">
+              <input id="scale_w" type="number" min="0" step="any" inputmode="decimal" value="${esc(initialScale)}" placeholder="${initialUnit==='t'?'مثال: 5.25':'مثال: 5250'}">
+              <select id="scale_unit">
+                <option value="t" ${initialUnit==='t'?'selected':''}>طن</option>
+                <option value="kg" ${initialUnit==='kg'?'selected':''}>كجم</option>
+              </select>
+            </div>
+            <div class="muted" id="scaleHint" style="margin-top:4px"></div>
+          </div>
           <div class="f"><label>مصنع التعبئة</label>${partySelect('packing_factory','factory',factories,r.packing_factory)}</div>
           <div class="f"><label>تاريخ التعبئة</label><input id="packing_date" type="date" value="${esc(r.packing_date||'')}"> </div>
           <div class="f"><label>تاريخ الإنتاج</label><input id="production_date" type="date" value="${esc(r.production_date||'')}"> </div>
           <div class="f"><label>الصنف</label><input id="variety" value="${esc(r.variety||'')}"> </div>
           <div class="f"><label>المقاس / الدرجة</label><input id="size_grade" value="${esc(r.size_grade||'')}"> </div>
-          <div class="f"><label>وزن الكرتونة (كجم)</label><input id="carton_weight_kg" type="number" step="0.01" value="${esc(r.carton_weight_kg||'')}"> </div>
+          <div class="f"><label>وزن الكرتونة (كجم)</label><input id="carton_weight_kg" type="number" step="0.01" min="0" value="${esc(r.carton_weight_kg||'')}"> </div>
           <div class="f span"><label>ملاحظات</label><input id="notes" value="${esc(r.notes||'')}"> </div>
         </div>
-        <div class="row"><button class="btn pri" data-act="save-lot">حفظ</button>${edit?`<button class="btn ghost" data-act="cancel">إلغاء</button>`:''}</div>
+        <div class="sticker-calc" id="stickerCalc"></div>
+        <div class="row"><button class="btn pri" data-act="save-lot">${edit ? 'حفظ التعديل' : 'حفظ'} </button>${edit?`<button class="btn ghost" data-act="cancel">إلغاء</button>`:''}</div>
         <div id="lotMsg"></div>
       </div>
       <div class="card">
         <h2>اللوتات المسجّلة</h2>
-        <div class="table-wrap"><table class="tbl"><thead><tr><th>اللوت</th><th>المورد</th><th>الاستلام</th><th>المصنع</th><th>الصنف</th><th>الوزن</th><th></th></tr></thead><tbody>
-        ${lots.length? lots.map(l => `<tr>
+        <div class="table-wrap"><table class="tbl"><thead><tr><th>اللوت</th><th>المورد</th><th>الاستلام</th><th>المصنع</th><th>الميزان</th><th>الاستيكرات</th><th></th></tr></thead><tbody>
+        ${lots.length? lots.map(l => {
+          const req = ST.requiredStickers(l.weight_kg, l.carton_weight_kg);
+          const wtxt = (l.weight_kg == null || l.weight_kg === '') ? '—' :
+            (Number(l.weight_kg) >= 1000 ? `${ST.kgToScale(l.weight_kg,'t')} طن` : `${l.weight_kg} كجم`);
+          return `<tr>
           <td class="ltr">${esc(l.lot_number)}</td><td>${val(l.supplier)}</td><td class="ltr">${dateVal(l.receipt_date)}</td>
-          <td>${val(l.packing_factory)}</td><td>${val(l.variety)}</td><td class="num">${val(l.weight_kg)}</td>
+          <td>${val(l.packing_factory)}</td><td class="num">${wtxt}</td><td class="num">${req != null ? req : '—'}</td>
           <td><button class="btn sm" data-edit="${l.id}">تعديل</button>
               <button class="btn sm ghost" data-trace="${l.id}">تتبع</button></td>
-        </tr>`).join('') : '<tr><td colspan="7">لا يوجد بعد</td></tr>'}
+        </tr>`;
+        }).join('') : '<tr><td colspan="7">لا يوجد بعد</td></tr>'}
         </tbody></table></div>
       </div>`;
     box.querySelectorAll('select[data-party]').forEach(sel => {
       sel.addEventListener('change', () => ensureParty(sel.getAttribute('data-party'), sel));
     });
+
+    function currentWeightKg() {
+      return ST.scaleToKg(box.querySelector('#scale_w').value, box.querySelector('#scale_unit').value);
+    }
+    function refreshCalc() {
+      const unit = box.querySelector('#scale_unit').value;
+      const kg = currentWeightKg();
+      const carton = numOrNull(box.querySelector('#carton_weight_kg').value);
+      const hint = box.querySelector('#scaleHint');
+      const calc = box.querySelector('#stickerCalc');
+      if (kg != null && kg > 0) {
+        hint.textContent = unit === 't'
+          ? `أي ${formatNum(kg)} كجم`
+          : `أي ${formatNum(kg / 1000, 3)} طن`;
+      } else {
+        hint.textContent = unit === 't' ? 'اكتب الوزن بالطن، والكسور مقبولة (مثال 5.25).' : 'اكتب الوزن بالكجم، والكسور مقبولة.';
+      }
+      const need = ST.requiredStickers(kg, carton);
+      let html = '';
+      if (need != null) {
+        html += `<div>عدد الاستيكرات المطلوب</div><div class="big num ltr">${need}</div>
+          <div class="muted">${formatNum(kg)} كجم ÷ ${formatNum(carton)} كجم للكرتونة</div>`;
+      } else {
+        html += `<div class="muted">اكتب ميزان العربية ووزن الكرتونة عشان يتحسب عدد الاستيكرات تلقائي.</div>`;
+      }
+      if (edit && stats) {
+        const assigned = stats.assigned || 0;
+        const onCon = stats.on_container || 0;
+        if (need != null) {
+          const diff = need - assigned;
+          html += `<div style="margin-top:10px">المربوط باللوت حالياً: <b class="num">${assigned}</b> استيكر</div>`;
+          if (diff > 0) {
+            html += `<div>الفرق: يلزم طباعة <b class="num">${diff}</b> استيكر زيادة (نفس نظام الرقم، أرقام جديدة للزيادة فقط).</div>
+              <div class="row" style="margin:8px 0 0">
+                <button class="btn pri" type="button" data-act="print-diff">اطبع الفرق (${diff} استيكر)</button>
+                <select id="diffSize" style="max-width:240px">${sizeOpts}</select>
+              </div>`;
+          } else if (diff === 0) {
+            html += `<div>العدد مطابق للمطبوع/المربوط حالياً.</div>`;
+          } else {
+            html += `<div>العدد الجديد أقل من المربوط بـ <b class="num">${-diff}</b> استيكر. الأرقام الحالية مش هتتمسح تلقائي.</div>`;
+          }
+          if (onCon > need) {
+            html += `<div class="notice warn" style="margin-top:10px">تحذير: في <b class="num">${onCon}</b> كرتونة من اللوت ده متحمّلة على حاويات، وده أكبر من العدد الجديد (${need}). راجع التحميل قبل ما تعتمده.</div>`;
+          }
+        } else if (assigned) {
+          html += `<div style="margin-top:10px">المربوط باللوت حالياً: <b class="num">${assigned}</b> استيكر</div>`;
+        }
+      } else if (need != null) {
+        html += `<div class="muted" style="margin-top:8px">بعد الحفظ تقدر تولّد وتطبع العدد ده، ولو عدّلت الميزان بعد كده يظهر الفرق.</div>`;
+      }
+      calc.innerHTML = html;
+      const pd = calc.querySelector('[data-act="print-diff"]');
+      if (pd) pd.onclick = () => printDifference(need);
+    }
+    function formatNum(n, d) {
+      const x = Number(n);
+      if (!Number.isFinite(x)) return '';
+      const s = x.toFixed(d == null ? (Math.abs(x - Math.round(x)) < 1e-9 ? 0 : 3) : d);
+      return s.replace(/\.?0+$/, '') || '0';
+    }
+    async function printDifference(need) {
+      if (!edit || !edit.id) return;
+      const assigned = (stats && stats.assigned) || 0;
+      const diff = need - assigned;
+      if (diff <= 0) return;
+      if (!confirm(`هنولّد ${diff} رقم جديد للوت ${r.lot_number} (الفرق بس، من غير تكرار الأرقام القديمة) ونجهّزهم للطباعة. نكمّل؟`)) return;
+      const msg = box.querySelector('#lotMsg');
+      msg.innerHTML = toast('جاري توليد أرقام الفرق…', '');
+      try {
+        const sizeId = (box.querySelector('#diffSize') || {}).value || '50x30';
+        const cfg = STLabels.cfgFrom(sizeId);
+        const res = await ST.generateBatch(diff, cfg.id, {
+          repeatRows: cfg.repeatRows, repeatCols: cfg.repeatCols,
+          repeatFontPt: cfg.repeatFontPt, mainFontPt: cfg.mainFontPt,
+          marginMm: cfg.marginMm
+        }, `فرق ميزان ${r.lot_number}`);
+        const asg = await ST.assignRange(res.first_serial, res.last_serial, edit.id, null, false, null);
+        if (!asg.ok) throw new Error(asg.reason === 'conflict' ? 'في تعارض في التخصيص. راجع الأرقام.' : 'تعذر ربط الأرقام باللوت');
+        msg.innerHTML = toast(`اتولد الفرق: من ${res.first_serial} إلى ${res.last_serial} (${res.count} استيكر). جاهزة للطباعة.`, 'ok');
+        offerPrintButtons(msg, res.batch_id, cfg);
+        stats = await ST.lotStickerStats(edit.id);
+        refreshCalc();
+        // refresh list without leaving the edit form
+        lots = await ST.listLots();
+      } catch (e) {
+        msg.innerHTML = toast(ST.errMsg(e), 'warn');
+      }
+    }
+    const unitEl = box.querySelector('#scale_unit');
+    unitEl.addEventListener('change', () => {
+      const to = unitEl.value;
+      const from = to === 't' ? 'kg' : 't';
+      const raw = box.querySelector('#scale_w').value;
+      const kg = ST.scaleToKg(raw, from);
+      box.querySelector('#scale_w').value = kg == null ? raw : ST.kgToScale(kg, to);
+      box.querySelector('#scale_w').placeholder = to === 't' ? 'مثال: 5.25' : 'مثال: 5250';
+      refreshCalc();
+    });
+    ['scale_w','carton_weight_kg'].forEach(id => {
+      box.querySelector('#'+id).addEventListener('input', refreshCalc);
+    });
+    refreshCalc();
+
     box.querySelector('[data-act="save-lot"]').onclick = async () => {
       try {
         const supplier = await ensureParty('supplier', box.querySelector('#supplier'));
@@ -487,7 +644,7 @@
           lot_number: box.querySelector('#lot_number').value.trim(),
           supplier: supplier || null,
           receipt_date: box.querySelector('#receipt_date').value || null,
-          weight_kg: numOrNull(box.querySelector('#weight_kg').value),
+          weight_kg: currentWeightKg(),
           packing_factory: factory || null,
           packing_date: box.querySelector('#packing_date').value || null,
           production_date: box.querySelector('#production_date').value || null,
@@ -497,9 +654,15 @@
           notes: box.querySelector('#notes').value.trim() || null
         };
         if (!row.lot_number) throw new Error('رقم اللوت مطلوب');
-        await ST.saveLot(row, edit && edit.id);
-        box.querySelector('#lotMsg').innerHTML = toast('تم الحفظ', 'ok');
-        await drawLots();
+        const need = ST.requiredStickers(row.weight_kg, row.carton_weight_kg);
+        if (edit && stats && need != null && stats.on_container > need) {
+          if (!confirm(`تحذير: في ${stats.on_container} كرتونة متحمّلة على حاويات، أكبر من العدد الجديد (${need}). تحفظ التعديل رغم كده؟`)) return;
+        }
+        const saved = await ST.saveLot(row, edit && edit.id);
+        // stay on the lot so the required-vs-printed panel and print-diff are visible
+        await drawLots(saved);
+        const msg = box.querySelector('#lotMsg');
+        if (msg) msg.innerHTML = toast('تم الحفظ', 'ok') + msg.innerHTML;
       } catch (e) {
         box.querySelector('#lotMsg').innerHTML = toast(ST.errMsg(e), 'warn');
       }
