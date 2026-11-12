@@ -96,3 +96,9 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px}
 .weight-in select{width:118px;flex:0 0 118px}
 .sticker-calc{margin:14px 0 4px;background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
 .sticker-calc .big{font-size:32px;font-weight:800;letter-spacing:-.4px;line-height:1.2;margin:2px 0}
+
+.f .hint{font-size:12px;color:var(--mut)}
+.date-in{letter-spacing:.3px}
+.print-cfg{margin-top:16px;padding-top:8px}
+.alloc-box{margin-top:18px;padding-top:8px;border-top:1px solid var(--line)}
+.sticker-calc .notice{margin-bottom:0}

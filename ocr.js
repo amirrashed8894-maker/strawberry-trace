@@ -1,16 +1,9 @@
 (function (global) {
   const SERIAL_RE = /RS[-\s]?(\d{6})[-\s]?([A-HJ-NP-Z2-9OIL01]{4})/gi;
+  const LOT_RE = /FS[-\s]?([0O][\dOIl]{3})[-\s]?([0OIl\d]{2,4})/gi;
   const CHECK_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-  function fixChar(ch) {
-    const u = String(ch).toUpperCase();
-    if (u === 'O' || u === '0') return null; // not in alphabet — try both later
-    if (u === 'I' || u === 'L' || u === '1') return null;
-    return CHECK_ALPHABET.includes(u) ? u : u;
-  }
   function fixCheck(raw) {
-    const map = { O:'Q', '0':'Q', I:'J', L:'J', '1':'7' };
-    // Common OCR confusions mapped to nearest allowed letter — we also expand candidates
     const opts = [''];
     const s = String(raw).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
     if (s.length !== 4) return [];
@@ -35,6 +28,10 @@
     return [...new Set(opts.filter(Boolean))];
   }
 
+  function fixDigits(raw) {
+    return String(raw).toUpperCase().replace(/O/g, '0').replace(/[IL]/g, '1').replace(/[^\d]/g, '');
+  }
+
   function extractSerialsFromText(text) {
     const counts = new Map();
     const src = String(text || '').toUpperCase();
@@ -45,6 +42,15 @@
       const checks = fixCheck(m[2]);
       for (const chk of checks) {
         const serial = `RS-${num}-${chk}`;
+        counts.set(serial, (counts.get(serial) || 0) + 1);
+      }
+    }
+    LOT_RE.lastIndex = 0;
+    while ((m = LOT_RE.exec(src))) {
+      const yy = fixDigits(m[1]);
+      const seq = fixDigits(m[2]);
+      if (yy.length === 4 && seq.length >= 2) {
+        const serial = `FS-${yy}-${seq.padStart(2, '0')}`;
         counts.set(serial, (counts.get(serial) || 0) + 1);
       }
     }

@@ -13,11 +13,7 @@
     ['packing_date', 'تاريخ التعبئة', 'Packing date'],
     ['production_date', 'تاريخ الإنتاج', 'Production date'],
     ['receipt_date', 'تاريخ الاستلام', 'Receipt date'],
-    ['carton_net_weight', 'الوزن الصافي للكرتونة (كجم)', 'Carton net weight (kg)'],
-    ['container_number', 'رقم الحاوية', 'Container number'],
-    ['loading_date', 'تاريخ التحميل', 'Loading date'],
-    ['customer', 'العميل', 'Customer'],
-    ['destination', 'جهة الوصول', 'Destination']
+    ['carton_net_weight', 'الوزن الصافي للكرتونة (كجم)', 'Carton net weight (kg)']
   ];
 
   function cairoToday() {
@@ -29,11 +25,29 @@
     const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
   }
+  function parseDateInput(x) {
+    let s = String(x == null ? '' : x).trim()
+      .replace(/[\u0660-\u0669]/g, c => String(c.charCodeAt(0) - 0x660))
+      .replace(/[\u06F0-\u06F9]/g, c => String(c.charCodeAt(0) - 0x6F0))
+      .replace(/[\u066B\u066C\u2013\u2014.\-]/g, '/')
+      .replace(/\s+/g, '');
+    let y, mo, d, m;
+    if ((m = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/))) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+    else if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/))) { d = +m[1]; mo = +m[2]; y = +m[3]; }
+    else return '';
+    if (mo < 1 || mo > 12 || d < 1 || d > 31 || y < 1990 || y > 2100) return '';
+    const dt = new Date(Date.UTC(y, mo - 1, d));
+    if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return '';
+    return y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  }
   function normalizeSerial(raw) {
     if (!raw) return '';
     let s = String(raw).toUpperCase().trim().replace(/[\s_]/g, '');
-    const m = s.match(/RS-?(\d{6})-?([A-HJ-NP-Z2-9]{4})$/);
-    return m ? `RS-${m[1]}-${m[2]}` : s;
+    const carton = s.match(/RS-?(\d{6})-?([A-HJ-NP-Z2-9]{4})$/);
+    if (carton) return `RS-${carton[1]}-${carton[2]}`;
+    const lot = s.match(/FS-?(\d{4})-?(\d{2,})$/);
+    if (lot) return `FS-${lot[1]}-${lot[2].padStart(2, '0')}`;
+    return s;
   }
   function errMsg(e) {
     if (!e) return 'حصل خطأ غير معروف';
@@ -47,31 +61,47 @@
     return data;
   }
 
+  function baseCartons(weightKg, cartonKg) {
+    const w = Number(weightKg), c = Number(cartonKg);
+    if (!w || !c || w <= 0 || c <= 0) return null;
+    return Math.ceil((w / c) - 1e-9);
+  }
+  function requiredStickers(weightKg, cartonKg, sparePct) {
+    const base = baseCartons(weightKg, cartonKg);
+    if (base == null) return null;
+    const spare = (sparePct == null || sparePct === '') ? 10 : Number(sparePct);
+    if (Number.isNaN(spare) || spare < 0) return null;
+    return Math.ceil((base * (1 + spare / 100)) - 1e-9);
+  }
+  function scaleToKg(value, unit) {
+    const n = Number(value);
+    if (value === '' || value == null || Number.isNaN(n)) return null;
+    return unit === 't' ? n * 1000 : n;
+  }
+  function kgToScale(kg, unit) {
+    if (kg == null || kg === '' || Number.isNaN(Number(kg))) return '';
+    const n = Number(kg);
+    return unit === 't' ? (Math.round((n / 1000) * 1000) / 1000) : (Math.round(n * 100) / 100);
+  }
+
   const api = {
-    sb, FIELDS, cairoToday, fmtDate, normalizeSerial, errMsg,
-    // Admin is open by design (v1.0.4): no login. Operations go through granted RPCs only.
+    sb, FIELDS, cairoToday, fmtDate, parseDateInput, normalizeSerial, errMsg,
+    baseCartons, requiredStickers, scaleToKg, kgToScale,
     lookup(serial) { return rpc('st_lookup_carton', { p_serial: serial }); },
     serialStatus(serial) { return rpc('st_serial_status', { p_serial: serial }); },
     generateBatch(count, labelSize, labelConfig, notes) {
       return rpc('st_generate_batch', { p_count: count, p_label_size: labelSize, p_label_config: labelConfig || {}, p_notes: notes || null });
     },
-    assignRange(from, to, lotId, containerId, onlyFree, weight) {
-      return rpc('st_assign_range', {
-        p_from: from, p_to: to,
-        p_lot_id: lotId || null,
-        p_container_id: containerId || null,
-        p_only_free: !!onlyFree,
-        p_carton_weight: weight == null || weight === '' ? null : Number(weight)
-      });
-    },
-    unassignRange(from, to, what) {
-      return rpc('st_unassign_range', { p_from: from, p_to: to, p_what: what || 'both' });
-    },
-    assignLotToContainer(lotId, containerId, onlyUnassigned) {
-      return rpc('st_assign_lot_to_container', { p_lot_id: lotId, p_container_id: containerId, p_only_unassigned: !!onlyUnassigned });
-    },
     nextLotNumber() { return rpc('st_next_lot_number'); },
     markPrinted(id) { return rpc('st_mark_batch_printed', { p_batch_id: id }); },
+    markLotPrinted(lotId, add, labelSize, labelConfig) {
+      return rpc('st_mark_lot_printed', {
+        p_lot_id: lotId,
+        p_add: add,
+        p_label_size: labelSize || null,
+        p_label_config: labelConfig || {}
+      });
+    },
     settings() { return rpc('st_get_settings'); },
     saveSettings(patch) { return rpc('st_save_settings', { p_patch: patch || {} }); },
     async parties(kind) {
@@ -97,9 +127,16 @@
       return data || [];
     },
     saveContainer(row, id) { return rpc('st_save_container', { p_row: row, p_id: id || null }); },
+    allocateLot(lotId, containerId, count) {
+      return rpc('st_allocate_lot', { p_lot_id: lotId, p_container_id: containerId, p_carton_count: count });
+    },
     async dashboard() {
       const d = await rpc('st_dashboard');
-      return d || { total:0, withLot:0, loaded:0, free:0, lots:0, containers:0, batches:0, printedCartons:0, recentScans:[] };
+      return d || { lots:0, containers:0, printedStickers:0, baseCartons:0, allocatedCartons:0, unloadedLots:0, legacyCartons:0, legacyFree:0, legacyBatches:0, recentScans:[] };
+    },
+    async searchAll(q) {
+      const data = await rpc('st_search_all', { p_q: q || '' });
+      return data || { lots:[], containers:[], cartons:[] };
     },
     async search({ q, lotId, containerId, supplier }) {
       const data = await rpc('st_search_cartons', {
@@ -114,39 +151,7 @@
       const data = await rpc('st_lot_trace', { p_lot_id: lotId });
       return data;
     },
-    lotStickerStats(lotId) { return rpc('st_lot_sticker_stats', { p_lot_id: lotId }); },
-    requiredStickers(weightKg, cartonKg) {
-      const w = Number(weightKg), c = Number(cartonKg);
-      if (!w || !c || w <= 0 || c <= 0) return null;
-      return Math.ceil((w / c) - 1e-9);
-    },
-    scaleToKg(value, unit) {
-      const n = Number(value);
-      if (value === '' || value == null || Number.isNaN(n)) return null;
-      return unit === 't' ? n * 1000 : n;
-    },
-    kgToScale(kg, unit) {
-      if (kg == null || kg === '' || Number.isNaN(Number(kg))) return '';
-      const n = Number(kg);
-      return unit === 't' ? (Math.round((n / 1000) * 1000) / 1000) : (Math.round(n * 100) / 100);
-    },
-    async exportRows(rows) {
-      return (rows || []).map(r => ({
-        serial: r.serial,
-        seq: r.seq,
-        lot_number: r.st_lots?.lot_number || '',
-        supplier: r.st_lots?.supplier || '',
-        packing_factory: r.st_lots?.packing_factory || '',
-        variety: r.st_lots?.variety || '',
-        size_grade: r.st_lots?.size_grade || '',
-        packing_date: r.st_lots?.packing_date || '',
-        carton_net_weight: r.carton_net_weight_kg || r.st_lots?.carton_weight_kg || '',
-        container_number: r.st_containers?.container_number || '',
-        loading_date: r.st_containers?.loading_date || '',
-        customer: r.st_containers?.customer || '',
-        destination: r.st_containers?.destination || ''
-      }));
-    }
+    lotStickerStats(lotId) { return rpc('st_lot_sticker_stats', { p_lot_id: lotId }); }
   };
 
   global.ST = api;
