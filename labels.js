@@ -41,35 +41,29 @@
   function labelBands(cfg) {
     const m = cfg.marginMm;
     const mainH = Math.max(6.2, cfg.mainFontPt * 0.48 + 2.4);
-    const urlH = Math.max(3.2, (cfg.urlFontPt || 4.2) * 0.5 + 1.4);
     return {
       m,
       mainH,
-      urlH,
-      mainR: { x: m, y: m, w: cfg.widthMm - m * 2, h: mainH },
-      urlR: { x: m, y: cfg.heightMm - m - urlH, w: cfg.widthMm - m * 2, h: urlH }
+      urlH: 0,
+      mainR: { x: m, y: m, w: cfg.widthMm - m * 2, h: mainH }
     };
   }
 
   function labelInnerHTML(cfg, serial, baseUrl) {
-    const host = siteHost(baseUrl);
     const bands = labelBands(cfg);
     const midTop = bands.m + bands.mainH + 0.2;
-    const midBot = cfg.heightMm - bands.m - bands.urlH - 0.2;
+    const midBot = cfg.heightMm - bands.m - 0.2;
     const cells = [];
     for (let i = 0; i < cfg.repeatRows * cfg.repeatCols; i++) {
       cells.push(`<span style="font-size:${cfg.repeatFontPt}pt;font-weight:700;letter-spacing:-0.1px;line-height:1;white-space:nowrap;direction:ltr;color:#111;">${serial}</span>`);
     }
     return `
       <div class="st-label" style="width:${cfg.widthMm}mm;height:${cfg.heightMm}mm;position:relative;overflow:hidden;background:#fff;color:#000;border:0.25mm solid #222;box-sizing:border-box;font-family:Helvetica,Arial,sans-serif;">
-        <div class="st-grid" style="position:absolute;top:${midTop}mm;left:${bands.m}mm;right:${bands.m}mm;height:${(midBot-midTop).toFixed(2)}mm;display:grid;grid-template-columns:repeat(${cfg.repeatCols},1fr);grid-template-rows:repeat(${cfg.repeatRows},1fr);align-items:center;justify-items:center;pointer-events:none;">
+        <div class="st-grid" style="position:absolute;top:${midTop}mm;left:${bands.m}mm;right:${bands.m}mm;bottom:${bands.m}mm;height:${(midBot-midTop).toFixed(2)}mm;display:grid;grid-template-columns:repeat(${cfg.repeatCols},1fr);grid-template-rows:repeat(${cfg.repeatRows},1fr);align-items:center;justify-items:center;pointer-events:none;">
           ${cells.join('')}
         </div>
         <div class="st-main" style="position:absolute;top:${bands.m}mm;left:${bands.m}mm;right:${bands.m}mm;height:${bands.mainH}mm;background:#fff;display:flex;align-items:center;justify-content:center;padding:0 0.4mm;box-sizing:border-box;">
           <div style="font-size:${cfg.mainFontPt}pt;font-weight:900;letter-spacing:-0.2px;line-height:1;white-space:nowrap;direction:ltr;color:#000;">${serial}</div>
-        </div>
-        <div class="st-url" style="position:absolute;left:${bands.m}mm;right:${bands.m}mm;bottom:${bands.m}mm;height:${bands.urlH}mm;background:#fff;display:flex;align-items:center;justify-content:center;padding:0 0.4mm;box-sizing:border-box;">
-          <div style="font-size:${cfg.urlFontPt}pt;font-weight:600;letter-spacing:0;line-height:1;white-space:nowrap;direction:ltr;color:#222;">${host}</div>
         </div>
       </div>`;
   }
@@ -137,7 +131,6 @@
   }
 
   function drawLabel(doc, cfg, x, y, serial, baseUrl) {
-    const host = siteHost(baseUrl);
     const bands = labelBands(cfg);
     const m = cfg.marginMm;
     const w = cfg.widthMm, h = cfg.heightMm;
@@ -145,7 +138,7 @@
     doc.setLineWidth(0.18);
     doc.rect(x, y, w, h);
     const midTop = y + m + bands.mainH + 0.2;
-    const midBot = y + h - m - bands.urlH - 0.2;
+    const midBot = y + h - m - 0.2;
     const cellW = (w - m * 2) / cfg.repeatCols;
     const cellH = (midBot - midTop) / cfg.repeatRows;
     doc.setFont('courier', 'bold');
@@ -159,19 +152,12 @@
       }
     }
     const mainR = { x: x + bands.mainR.x, y: y + bands.mainR.y, w: bands.mainR.w, h: bands.mainR.h };
-    const urlR = { x: x + bands.urlR.x, y: y + bands.urlR.y, w: bands.urlR.w, h: bands.urlR.h };
     doc.setFillColor(255, 255, 255);
     doc.rect(mainR.x, mainR.y, mainR.w, mainR.h, 'F');
     doc.setFont('courier', 'bold');
     doc.setFontSize(cfg.mainFontPt);
     doc.setTextColor(0);
     doc.text(serial, x + w / 2, mainR.y + mainR.h / 2, { align: 'center', baseline: 'middle' });
-    doc.setFillColor(255, 255, 255);
-    doc.rect(urlR.x, urlR.y, urlR.w, urlR.h, 'F');
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(cfg.urlFontPt || 4.2);
-    doc.setTextColor(30);
-    doc.text(host, x + w / 2, urlR.y + urlR.h / 2, { align: 'center', baseline: 'middle' });
   }
 
   async function buildPdfDoc(serials, cfg, baseUrl, onProg) {

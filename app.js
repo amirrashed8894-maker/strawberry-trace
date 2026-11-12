@@ -517,7 +517,7 @@
         <div id="stickerCalc" class="sticker-calc"></div>
         <div class="print-cfg" id="printCfg">
           <h2>طباعة الاستيكرات</h2>
-          <p class="muted">كل استيكرات اللوت بنفس الرقم، متكرر على الاستيكر، وفي أسفله عنوان موقع التتبع. مفيش أرقام جديدة للزيادة — اطبع الفرق يعني نسخ إضافية من نفس الرقم.</p>
+          <p class="muted">كل استيكرات اللوت بنفس الرقم، متكرر على الاستيكر. مفيش أرقام جديدة للزيادة — اطبع الفرق يعني نسخ إضافية من نفس الرقم.</p>
           <div class="grid g3">
             <div class="f"><label>مقاس الاستيكر</label><select id="size">${opts}</select></div>
             <div class="f"><label>صفوف التكرار</label><input id="rRows" type="number" min="2" max="20"></div>
@@ -932,7 +932,7 @@
     box.innerHTML = `<div class="card">
       <div class="f"><label>اسم الشركة</label><input id="cn" value="${esc(s.company_name||'')}"></div>
       <div class="f" style="margin-top:8px"><label>الاسم بالإنجليزية</label><input id="cne" class="ltr" value="${esc(s.company_name_en||'')}"></div>
-      <div class="f" style="margin-top:8px"><label>عنوان الموقع المطبوع أسفل الاستيكر</label><input id="url" class="ltr" value="${esc(s.public_base_url||'')}"></div>
+      <div class="f" style="margin-top:8px"><label>عنوان الموقع العام</label><input id="url" class="ltr" value="${esc(s.public_base_url||'')}"></div>
       <div class="f" style="margin-top:8px"><label>نسبة الاستيكرات الاحتياطية الافتراضية (%)</label>
         <input id="spare" class="ltr" inputmode="decimal" value="${esc(s.default_spare_pct != null ? s.default_spare_pct : 10)}">
         <div class="hint">تتحسب فوق عدد الكراتين: مثلاً 500 كرتونة + 10٪ = 550 استيكر بنفس رقم اللوت.</div>
