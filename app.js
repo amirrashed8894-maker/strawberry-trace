@@ -590,8 +590,9 @@
     function formatNum(n, d) {
       const x = Number(n);
       if (!Number.isFinite(x)) return '';
-      const s = x.toFixed(d == null ? (Math.abs(x - Math.round(x)) < 1e-9 ? 0 : 3) : d);
-      return s.replace(/\.?0+$/, '') || '0';
+      const dec = d == null ? 3 : d;
+      const s = x.toFixed(dec);
+      return s.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
     }
     async function printDifference(need) {
       if (!edit || !edit.id) return;
