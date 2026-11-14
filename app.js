@@ -1,6 +1,8 @@
 (function () {
   const app = document.getElementById('app');
-  const state = { user: null, admin: false, settings: null, toast: '' };
+  const state = { user: null, admin: false, settings: null, toast: '', recovery: false };
+  const LAST_EMAIL_KEY = 'st-last-admin-email';
+  const ADMIN_ROUTES = ['dash','lots','containers','search','settings','legacy'];
 
   function path() { return (location.pathname.replace(/\/+$/, '') || '/'); }
   function toHref(href) {
@@ -69,7 +71,8 @@
       ['/admin/settings', 'settings', 'الإعدادات']
     ];
     return `<nav class="nav">${items.map(i => `<a href="${i[0]}" class="${cur===i[1]?'on':''}">${i[2]}</a>`).join('')}
-      <a href="/" class="ghost">الموقع العام</a></nav>`;
+      <a href="/" class="ghost">الموقع العام</a>
+      <a href="#" data-act="logout" class="ghost">خروج</a></nav>`;
   }
   function toast(msg, kind) {
     return msg ? `<div class="notice ${kind||''}">${esc(msg)}</div>` : '';
@@ -371,6 +374,113 @@
     try {
       return new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }).format(new Date(iso));
     } catch (e) { return iso; }
+  }
+
+  /* ---------------- Admin login (once per device) ---------------- */
+  function lastEmail() { try { return localStorage.getItem(LAST_EMAIL_KEY) || ''; } catch (e) { return ''; } }
+  function viewLogin(msg) {
+    app.classList.remove('wide');
+    app.innerHTML = header('دخول الإدارة', 'تتبع الكرتون — شركة الراشد للتجارة') + `
+      <div class="card login">
+        <p class="muted" style="margin-top:0">سجّل دخول مرة واحدة على الجهاز ده، وهيفضل فاكرك لحد ما تضغط «خروج».</p>
+        <div class="f"><label for="email">البريد الإلكتروني</label>
+          <input id="email" class="ltr" type="email" autocomplete="username" inputmode="email" value="${esc(lastEmail())}"></div>
+        <div class="f" style="margin-top:10px"><label for="pass">كلمة المرور</label>
+          <input id="pass" class="ltr" type="password" autocomplete="current-password"></div>
+        <div class="row" style="margin-top:14px"><button class="btn pri wide" data-act="login">دخول</button></div>
+        <div class="row" style="margin:0"><button class="btn ghost wide sm" data-act="forgot" type="button">نسيت كلمة المرور</button></div>
+        <div id="loginMsg">${msg ? toast(msg, 'warn') : ''}</div>
+      </div>
+      <div class="footer"><a href="/">الموقع العام</a></div>`;
+    const email = app.querySelector('#email');
+    const pass = app.querySelector('#pass');
+    (email.value ? pass : email).focus();
+    app.querySelector('[data-act="login"]').onclick = doLogin;
+    pass.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+    email.addEventListener('keydown', e => { if (e.key === 'Enter') pass.focus(); });
+    app.querySelector('[data-act="forgot"]').onclick = doForgot;
+    const home = app.querySelector('.footer a');
+    home.addEventListener('click', ev => { ev.preventDefault(); go('/'); });
+  }
+  async function doLogin() {
+    const email = app.querySelector('#email').value.trim();
+    const passEl = app.querySelector('#pass');
+    const pass = passEl.value;
+    const box = app.querySelector('#loginMsg');
+    const btn = app.querySelector('[data-act="login"]');
+    box.innerHTML = '';
+    if (!email || !pass) { box.innerHTML = toast('اكتب البريد وكلمة المرور', 'warn'); return; }
+    btn.disabled = true;
+    try {
+      await ST.login(email, pass);
+      passEl.value = '';
+      try { localStorage.setItem(LAST_EMAIL_KEY, email); } catch (e) {}
+      const ok = await refreshAuth();
+      if (!ok) {
+        await ST.logout();
+        box.innerHTML = toast('الحساب ده مش حساب إدارة.', 'warn');
+        return;
+      }
+      render();
+    } catch (e) {
+      passEl.value = '';
+      box.innerHTML = toast(ST.errMsg(e), 'warn');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  async function doForgot() {
+    const email = app.querySelector('#email').value.trim();
+    const box = app.querySelector('#loginMsg');
+    if (!email) { box.innerHTML = toast('اكتب بريد الإدارة الأول، وبعدين اضغط «نسيت كلمة المرور».', 'warn'); return; }
+    const btn = app.querySelector('[data-act="forgot"]');
+    btn.disabled = true;
+    try {
+      await ST.sendReset(email);
+      box.innerHTML = toast('لو البريد ده مسجّل، هيوصلك عليه رابط لتغيير كلمة المرور. افتحه من نفس الجهاز.', 'ok');
+    } catch (e) {
+      box.innerHTML = toast(ST.errMsg(e), 'warn');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  function viewSetPassword() {
+    app.classList.remove('wide');
+    app.innerHTML = header('كلمة مرور جديدة', 'دخول الإدارة — تتبع الكرتون') + `
+      <div class="card login">
+        <div class="f"><label for="np1">كلمة المرور الجديدة</label>
+          <input id="np1" class="ltr" type="password" autocomplete="new-password"></div>
+        <div class="f" style="margin-top:10px"><label for="np2">اكتبها تاني</label>
+          <input id="np2" class="ltr" type="password" autocomplete="new-password"></div>
+        <div class="hint muted" style="margin-top:6px">8 حروف أو أرقام على الأقل.</div>
+        <div class="row" style="margin-top:14px"><button class="btn pri wide" data-act="setpw">حفظ والدخول</button></div>
+        <div id="pwMsg"></div>
+      </div>`;
+    app.querySelector('#np1').focus();
+    app.querySelector('[data-act="setpw"]').onclick = async () => {
+      const a = app.querySelector('#np1'), b = app.querySelector('#np2');
+      const box = app.querySelector('#pwMsg');
+      box.innerHTML = '';
+      if (a.value.length < 8) { box.innerHTML = toast('كلمة المرور لازم تكون 8 حروف أو أرقام على الأقل', 'warn'); return; }
+      if (a.value !== b.value) { box.innerHTML = toast('الكلمتين مش زي بعض', 'warn'); return; }
+      try {
+        await ST.setPassword(a.value);
+        a.value = ''; b.value = '';
+        state.recovery = false;
+        await refreshAuth();
+        history.replaceState({}, '', '/?p=admin');
+        render();
+      } catch (e) { box.innerHTML = toast(ST.errMsg(e), 'warn'); }
+    };
+  }
+  async function refreshAuth() {
+    const s = await ST.session();
+    state.user = s ? s.user : null;
+    state.admin = s ? await ST.isAdmin() : false;
+    if (state.admin) {
+      try { state.settings = await ST.settings(); } catch (e) {}
+    }
+    return state.admin;
   }
 
   /* ---------------- Dashboard ---------------- */
@@ -1020,6 +1130,11 @@
     app.querySelectorAll('.nav a, a.ghost').forEach(a => {
       a.addEventListener('click', ev => {
         const href = a.getAttribute('href');
+        if (a.getAttribute('data-act') === 'logout') {
+          ev.preventDefault();
+          ST.logout().then(() => { state.user = null; state.admin = false; state.settings = null; go('/'); });
+          return;
+        }
         if (href && href.startsWith('/')) { ev.preventDefault(); go(href); }
       });
     });
@@ -1027,8 +1142,10 @@
 
   async function render() {
     const r = parseRoute();
+    if (state.recovery) return viewSetPassword();
     if (r.name === 'home') return viewHome();
     if (r.name === 'carton') return viewCarton(r.serial);
+    if (ADMIN_ROUTES.includes(r.name) && !state.admin) return viewLogin();
     if (r.name === 'dash') return viewDash();
     if (r.name === 'lots') return viewLots();
     if (r.name === 'containers') return viewContainers();
@@ -1039,7 +1156,12 @@
   }
 
   async function init() {
-    try { state.settings = await ST.settings(); } catch (e) {}
+    ST.onAuth((event) => {
+      if (event === 'PASSWORD_RECOVERY') { state.recovery = true; setTimeout(render, 0); }
+      else if (event === 'SIGNED_OUT') { state.user = null; state.admin = false; state.settings = null; }
+    });
+    try { await refreshAuth(); } catch (e) {}
+    if (ST.RECOVERY_LINK && state.user) state.recovery = true;
     window.addEventListener('popstate', render);
     render();
   }

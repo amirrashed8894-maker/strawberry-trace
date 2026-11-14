@@ -1,4 +1,4 @@
-const C = 'strawberry-trace-v1.1.4';
+const C = 'strawberry-trace-v1.2.0';
 const F = [
   './',
   './index.html',

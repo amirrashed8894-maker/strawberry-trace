@@ -1,7 +1,10 @@
 (function (global) {
   const cfg = global.ST_CONFIG;
+  // Captured before the client consumes the URL hash of a password-reset link.
+  const RECOVERY_LINK = /(^|[#&])type=recovery(&|$)/.test(String(global.location.hash || ''));
   const sb = global.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+    // v1.2.0: admin login once per device; session is kept and refreshed until sign-out.
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'st-auth' }
   });
 
   const FIELDS = [
@@ -52,7 +55,13 @@
   function errMsg(e) {
     if (!e) return 'حصل خطأ غير معروف';
     const m = e.message || e.error_description || e.hint || String(e);
-    if (/not allowed|42501|permission/i.test(m)) return 'مفيش صلاحية للعملية دي';
+    if (/invalid login credentials/i.test(m)) return 'البريد أو كلمة المرور غير صحيحة';
+    if (/email not confirmed/i.test(m)) return 'البريد لم يتم تأكيده بعد';
+    if (/rate limit|too many/i.test(m)) return 'محاولات كثيرة. استنى شوية وجرّب تاني';
+    if (/password should be|weak password/i.test(m)) return 'كلمة المرور ضعيفة. استخدم 8 حروف وأرقام على الأقل';
+    if (/same password|different from the old/i.test(m)) return 'اختار كلمة مرور مختلفة عن القديمة';
+    if (/jwt expired|not allowed|42501|permission/i.test(m)) return 'مفيش صلاحية للعملية دي. سجّل دخول الإدارة تاني';
+    if (/failed to fetch|network/i.test(m)) return 'مفيش اتصال بالإنترنت';
     return m;
   }
   async function rpc(name, args) {
@@ -85,8 +94,30 @@
   }
 
   const api = {
-    sb, FIELDS, cairoToday, fmtDate, parseDateInput, normalizeSerial, errMsg,
+    sb, FIELDS, RECOVERY_LINK, cairoToday, fmtDate, parseDateInput, normalizeSerial, errMsg,
     baseCartons, requiredStickers, scaleToKg, kgToScale,
+    async session() {
+      const { data } = await sb.auth.getSession();
+      return (data && data.session) || null;
+    },
+    async login(email, password) {
+      const { data, error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      return data;
+    },
+    async logout() { try { await sb.auth.signOut(); } catch (e) { await sb.auth.signOut({ scope: 'local' }); } },
+    async isAdmin() {
+      try { return (await rpc('st_is_admin')) === true; } catch (e) { return false; }
+    },
+    async sendReset(email) {
+      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + '/?p=admin' });
+      if (error) throw error;
+    },
+    async setPassword(password) {
+      const { error } = await sb.auth.updateUser({ password });
+      if (error) throw error;
+    },
+    onAuth(cb) { return sb.auth.onAuthStateChange(cb); },
     lookup(serial) { return rpc('st_lookup_carton', { p_serial: serial }); },
     serialStatus(serial) { return rpc('st_serial_status', { p_serial: serial }); },
     generateBatch(count, labelSize, labelConfig, notes) {
