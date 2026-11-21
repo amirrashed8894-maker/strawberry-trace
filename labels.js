@@ -188,17 +188,21 @@
     return doc;
   }
 
-  async function downloadPdf(serials, cfg, baseUrl, onProg) {
+  /* v1.3.0: no doc.save() — open the real PDF in the in-app preview (PdfShare); «إرسال واتساب» there shares it,
+     «تحميل» there is the only (explicit) download. */
+  async function sharePdf(serials, cfg, baseUrl, onProg) {
     const doc = await buildPdfDoc(serials, cfg, baseUrl, onProg);
-    const name = `sticker-labels-${serials[0] || 'batch'}.pdf`;
-    doc.save(name);
+    const blob = doc.output('blob');
+    const name = `ستيكرات الفراولة — ${serials[0] || 'batch'}${serials.length > 1 ? ' (' + serials.length + ' نسخة)' : ''}.pdf`;
+    global.PdfShare.open(blob, name, { title: 'ستيكرات ' + (serials[0] || ''), heading: 'معاينة الستيكرات', history: false });
     return name;
   }
+  const downloadPdf = sharePdf;
 
   async function pdfBytes(serials, cfg, baseUrl, onProg) {
     const doc = await buildPdfDoc(serials, cfg, baseUrl, onProg);
     return doc.output('arraybuffer');
   }
 
-  global.STLabels = { PRESETS, cfgFrom, publicUrl, siteHost, labelInnerHTML, renderPreview, printLabels, downloadPdf, buildPrintHTML, pdfBytes };
+  global.STLabels = { PRESETS, cfgFrom, publicUrl, siteHost, labelInnerHTML, renderPreview, printLabels, sharePdf, downloadPdf, buildPrintHTML, pdfBytes };
 })(window);

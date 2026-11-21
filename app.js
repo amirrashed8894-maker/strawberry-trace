@@ -545,7 +545,7 @@
   function offerPrintButtons(msgEl, serials, cfg, baseUrl) {
     msgEl.innerHTML = `<div class="notice ok" id="printReady">جاهزة للطباعة — كل الاستيكرات بنفس الرقم ${esc(serials[0] || '')} (${serials.length} نسخة).
       <div class="row" style="margin-top:8px">
-        <button class="btn pri" type="button" data-act="pdf">تحميل PDF</button>
+        <button class="btn pri" type="button" data-act="pdf">PDF / واتساب</button>
         <button class="btn" type="button" data-act="browser">طباعة من المتصفح</button>
       </div>
       <div id="printProg" class="muted"></div>
@@ -554,8 +554,8 @@
     msgEl.querySelector('[data-act="pdf"]').onclick = async () => {
       try {
         prog('جاري تجهيز الـ PDF…');
-        await STLabels.downloadPdf(serials, cfg, baseUrl, m => prog(m));
-        prog('تم التحميل.');
+        await STLabels.sharePdf(serials, cfg, baseUrl, m => prog(m));
+        prog('الـ PDF مفتوح للمعاينة — ابعته من «إرسال واتساب».');
       } catch (e) { prog(ST.errMsg(e)); }
     };
     msgEl.querySelector('[data-act="browser"]').onclick = async () => {

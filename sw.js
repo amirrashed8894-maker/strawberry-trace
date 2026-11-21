@@ -1,4 +1,4 @@
-const C = 'strawberry-trace-v1.2.0';
+const C = 'strawberry-trace-v1.3.0';
 const F = [
   './',
   './index.html',
@@ -7,6 +7,9 @@ const F = [
   './api.js',
   './ocr.js',
   './labels.js',
+  './pdf-share.js',
+  './pdfjs/pdf.min.js?v=3.11.174',
+  './pdfjs/pdf.worker.min.js?v=3.11.174',
   './app.js',
   './manifest.webmanifest',
   './icon-180.png',
